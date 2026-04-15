@@ -1,0 +1,2403 @@
+openapi: 3.0.0
+info:
+  title: Rematix - Desarrollo de Aplicaciones
+  description: |
+    API RESTful para la plataforma de subastas Rematix.
+    
+    Esta API permite gestionar el ciclo completo de subastas online, incluyendo:
+    - Registro y autenticación de usuarios
+    - Exploración de subastas y catálogos
+    - Sistema de pujas en tiempo real
+    - Gestión de pagos y billetera digital
+    - Perfil de usuario y estadísticas
+    - Sistema de notificaciones
+    
+    Documentación del Trabajo Práctico.
+  version: 1.0.3
+  contact:
+    name: Equipo Rematix
+    email: soporte@rematix.com
+
+servers:
+  - url: https://api.rematix.com/v1
+    description: Servidor de producción
+  - url: https://api-staging.rematix.com/v1
+    description: Servidor de pruebas
+
+tags:
+  - name: 1. Autenticación y Registro
+    description: Endpoints para registro de usuarios, login y recuperación de contraseña
+  - name: 2. Home y Exploración
+    description: Pantalla principal y exploración de subastas
+  - name: 3. Catálogo e Ítems
+    description: Gestión de catálogos y detalles de artículos
+  - name: 4. Billetera y Pagos
+    description: Administración de medios de pago
+  - name: 5. Motor de Pujas
+    description: Sistema de pujas y ofertas en tiempo real
+  - name: 6. Perfil y Cuenta
+    description: Gestión del perfil de usuario
+  - name: 7. Notificaciones
+    description: Sistema de notificaciones y alertas
+  - name: 8. Checkout y Liquidación
+    description: Proceso de pago y liquidación de lotes ganados
+  - name: 9. Vendedor (Mis Bienes)
+    description: Gestión de artículos en venta
+
+paths:
+  # ==========================================
+  # 1. AUTENTICACIÓN Y REGISTRO
+  # ==========================================
+  
+  /auth/registro/paso1:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: "Paso 1: Datos Personales"
+      description: |
+        Recibe la información de la primera pantalla del proceso de registro
+        y crea un registro temporal en el sistema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistroPaso1Request"
+            examples:
+              ejemplo_completo:
+                summary: Registro básico
+                value:
+                  nombre_completo: Milagros Peledrotti
+                  documento: "35111222"
+                  direccion: Av. Alvear 1820
+                  pais_residencia: Argentina
+                  email: usuario@mail.com
+      responses:
+        "201":
+          description: Registro temporal creado exitosamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegistroPaso1Response"
+              examples:
+                respuesta_exitosa:
+                  value:
+                    registro_id: 105
+                    mensaje: "Registro creado. Continúe con el paso 2."
+        "400":
+          description: Datos inválidos o incompletos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                email_duplicado:
+                  value:
+                    error: "El email ya está registrado"
+                    codigo: "EMAIL_DUPLICADO"
+        "422":
+          description: Error de validación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/registro/paso2:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: "Paso 2: Creación de Contraseña"
+      description: |
+        Asocia una contraseña al registro temporal creado en el paso 1.
+        La contraseña debe cumplir con los requisitos de seguridad.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistroPaso2Request"
+            examples:
+              ejemplo_basico:
+                value:
+                  registro_id: 105
+                  password: "MiClave123!"
+      responses:
+        "200":
+          description: Contraseña asociada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Contraseña creada correctamente. Continúe con el paso 3."
+        "400":
+          description: Contraseña no cumple con los requisitos de seguridad
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                password_debil:
+                  value:
+                    error: "La contraseña debe tener al menos 8 caracteres, una mayúscula y un número"
+                    codigo: "PASSWORD_DEBIL"
+        "404":
+          description: Registro temporal no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/registro/paso3:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: "Paso 3: Validación de Identidad"
+      description: |
+        Sube las imágenes del DNI (frente y dorso) para validación de identidad.
+        Las imágenes serán procesadas por el sistema de KYC.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/RegistroPaso3Request"
+      responses:
+        "200":
+          description: Identidad validada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Documentos recibidos. Validación en proceso."
+                  estado_validacion:
+                    type: string
+                    enum: [EN_REVISION, APROBADO, RECHAZADO]
+                    example: EN_REVISION
+        "400":
+          description: Imágenes inválidas o ilegibles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Registro no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "413":
+          description: Archivos demasiado grandes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/registro/paso4-pago:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: "Paso 4: Agregar Medio de Pago Inicial"
+      description: |
+        Vincula un medio de pago inicial a la cuenta.
+        Puede ser tarjeta de crédito, cuenta bancaria o cheque.
+        Este paso finaliza el proceso de registro.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistroPaso4Request"
+            examples:
+              con_tarjeta:
+                summary: Registro con tarjeta
+                value:
+                  registro_id: 105
+                  tipo_pago: TARJETA
+                  detalles:
+                    numero_tarjeta: "4242424242424242"
+                    cvv: "123"
+                    fecha_expiracion: "12/25"
+                    titular: "MILAGROS PELEDROTTI"
+              con_cuenta_bancaria:
+                summary: Registro con cuenta bancaria
+                value:
+                  registro_id: 105
+                  tipo_pago: CUENTA_BANCARIA
+                  detalles:
+                    cbu_alias: "0170001234567890123456"
+                    titular: "Milagros Peledrotti"
+                    banco: "Banco Galicia"
+      responses:
+        "201":
+          description: Medio de pago vinculado. Registro finalizado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Registro completado exitosamente"
+                  usuario_id:
+                    type: string
+                    example: "uuid-user-001"
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        "400":
+          description: Datos de pago inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Registro no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: Iniciar Sesión
+      description: |
+        Autentica a un usuario registrado y devuelve un token JWT
+        para acceder a endpoints protegidos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              login_email:
+                summary: Login con email
+                value:
+                  email: usuario@mail.com
+                  password: MiClave123!
+      responses:
+        "200":
+          description: Login exitoso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              examples:
+                login_exitoso:
+                  value:
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    usuario_id: "uuid-user-001"
+                    nombre: "Milagros Peledrotti"
+        "401":
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                credenciales_invalidas:
+                  value:
+                    error: "Email o contraseña incorrectos"
+                    codigo: "CREDENCIALES_INVALIDAS"
+        "403":
+          description: Cuenta bloqueada o pendiente de validación
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: Cerrar Sesión
+      description: Invalida el token JWT actual del usuario.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sesión cerrada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Sesión cerrada correctamente"
+        "401":
+          description: Token inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/recuperar-clave:
+    post:
+      tags:
+        - 1. Autenticación y Registro
+      summary: Recuperar Contraseña
+      description: |
+        Envía un email con instrucciones para restablecer la contraseña.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecuperarClaveRequest"
+            examples:
+              solicitud_recuperacion:
+                value:
+                  email: usuario@mail.com
+      responses:
+        "200":
+          description: Email de recuperación enviado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Si el email existe, recibirás instrucciones para restablecer tu contraseña"
+        "400":
+          description: Email inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Demasiadas solicitudes. Intente más tarde.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /paises:
+    get:
+      tags:
+        - 1. Autenticación y Registro
+      summary: Catálogo de Países
+      description: |
+        Devuelve la lista completa de países disponibles para desplegables
+        en formularios de registro.
+      security: []
+      responses:
+        "200":
+          description: Lista de países obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pais"
+              examples:
+                lista_paises:
+                  value:
+                    - id: 1
+                      nombre: Argentina
+                      codigo_iso: AR
+                    - id: 2
+                      nombre: Uruguay
+                      codigo_iso: UY
+                    - id: 3
+                      nombre: Chile
+                      codigo_iso: CL
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bancos:
+    get:
+      tags:
+        - 1. Autenticación y Registro
+      summary: Catálogo de Bancos
+      description: |
+        Devuelve la lista de bancos disponibles para vinculación de cuentas bancarias.
+      security: []
+      responses:
+        "200":
+          description: Lista de bancos obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Banco"
+              examples:
+                lista_bancos:
+                  value:
+                    - id: 1
+                      nombre: Banco Galicia
+                      codigo: "007"
+                    - id: 2
+                      nombre: Banco Nación
+                      codigo: "011"
+                    - id: 3
+                      nombre: BBVA Argentina
+                      codigo: "017"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 2. HOME Y EXPLORACIÓN
+  # ==========================================
+
+  /categorias:
+    get:
+      tags:
+        - 2. Home y Exploración
+      summary: Obtener Categorías
+      description: |
+        Devuelve la lista completa de categorías disponibles
+        (Arte, Joyería, Relojes, Automóviles, etc.).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista de categorías obtenida correctamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Categoria"
+              examples:
+                categorias_disponibles:
+                  value:
+                    - id: 1
+                      nombre: Arte
+                      icono_url: https://cdn.rematix.com/icons/arte.svg
+                    - id: 2
+                      nombre: Joyería
+                      icono_url: https://cdn.rematix.com/icons/joyeria.svg
+                    - id: 3
+                      nombre: Relojes
+                      icono_url: https://cdn.rematix.com/icons/relojes.svg
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subastas:
+    get:
+      tags:
+        - 2. Home y Exploración
+      summary: Explorador completo de subastas
+      description: |
+        Devuelve el listado completo de subastas disponibles.
+        Sirve tanto para el Feed de Home como para la pestaña de Exploración.
+        Permite filtrar por categoría.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: categoria_id
+          in: query
+          description: ID de categoría para filtrar resultados
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: estado
+          in: query
+          description: Estado de la subasta
+          required: false
+          schema:
+            type: string
+            enum: [EN_VIVO, PROXIMAMENTE, FINALIZADA]
+        - name: limite
+          in: query
+          description: Número máximo de resultados
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: pagina
+          in: query
+          description: Número de página para paginación
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+      responses:
+        "200":
+          description: Listado obtenido correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subastas:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SubastaResumen"
+                  total:
+                    type: integer
+                    description: Total de subastas disponibles
+                  pagina_actual:
+                    type: integer
+                  total_paginas:
+                    type: integer
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 3. CATÁLOGO E ÍTEMS
+  # ==========================================
+
+  /subastas/{id}/catalogo:
+    get:
+      tags:
+        - 3. Catálogo e Ítems
+      summary: Obtener artículos de una subasta
+      description: |
+        Devuelve la lista de lotes/artículos de una subasta específica
+        para mostrar en la vista de catálogo. Incluye búsqueda por texto.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID único de la subasta
+          required: true
+          schema:
+            type: string
+            example: "uuid-sub-002"
+        - name: q
+          in: query
+          description: Término de búsqueda (ej. 'Ferrari', 'Rolex')
+          required: false
+          schema:
+            type: string
+            example: Ferrari
+        - name: orden
+          in: query
+          description: Orden de los resultados
+          required: false
+          schema:
+            type: string
+            enum: [precio_asc, precio_desc, tiempo_asc, lote_numero]
+            default: lote_numero
+      responses:
+        "200":
+          description: Catálogo cargado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subasta_info:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      titulo:
+                        type: string
+                      estado:
+                        type: string
+                  articulos:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArticuloResumen"
+                  total_articulos:
+                    type: integer
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Subasta no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /items/{id}:
+    get:
+      tags:
+        - 3. Catálogo e Ítems
+      summary: Detalle completo del artículo
+      description: |
+        Devuelve toda la información del artículo incluyendo:
+        - Ficha técnica completa
+        - Galería de imágenes
+        - Descripción detallada
+        - Estado actual de la puja
+        - Historial de propietarios (si aplica)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID único del artículo/ítem
+          required: true
+          schema:
+            type: string
+            example: "uuid-item-442"
+      responses:
+        "200":
+          description: Detalles del ítem obtenidos correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArticuloDetalle"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artículo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /items/{id}/favorito:
+    post:
+      tags:
+        - 3. Catálogo e Ítems
+      summary: Alternar Favorito (Corazón)
+      description: |
+        Agrega o quita el artículo de la lista de favoritos del usuario.
+        Actúa como toggle (si está marcado, lo desmarca y viceversa).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del artículo
+          required: true
+          schema:
+            type: string
+            example: "uuid-item-442"
+      responses:
+        "200":
+          description: Estado de favorito actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  es_favorito:
+                    type: boolean
+                    description: Estado actual después del toggle
+                    example: true
+                  mensaje:
+                    type: string
+                    example: "Artículo agregado a favoritos"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artículo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 4. BILLETERA Y PAGOS
+  # ==========================================
+
+  /billetera/medios-pago:
+    get:
+      tags:
+        - 4. Billetera y Pagos
+      summary: Listar Medios de Pago
+      description: |
+        Devuelve todos los medios de pago vinculados a la cuenta del usuario
+        (tarjetas, cuentas bancarias, cheques).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Listado obtenido exitosamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MedioPago"
+              examples:
+                medios_de_pago:
+                  value:
+                    - id: "pago-uuid-123"
+                      tipo_pago: TARJETA
+                      descripcion_corta: "Tarjeta Visa **** 4242"
+                      estado: VERIFICADA
+                      es_principal: true
+                    - id: "pago-uuid-456"
+                      tipo_pago: CUENTA_BANCARIA
+                      descripcion_corta: "Banco Galicia - CBU ****3456"
+                      estado: VERIFICADA
+                      es_principal: false
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - 4. Billetera y Pagos
+      summary: Agregar Nuevo Medio de Pago
+      description: |
+        Vincula un nuevo medio de pago a la cuenta del usuario.
+        Puede ser tarjeta de crédito, cuenta bancaria o cheque.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgregarMedioPagoRequest"
+            examples:
+              nueva_tarjeta:
+                summary: Agregar tarjeta
+                value:
+                  tipo_pago: TARJETA
+                  detalles:
+                    numero_tarjeta: "4242424242424242"
+                    cvv: "123"
+                    fecha_expiracion: "12/25"
+                    titular: "JUAN PEREZ"
+              nueva_cuenta:
+                summary: Agregar cuenta bancaria
+                value:
+                  tipo_pago: CUENTA_BANCARIA
+                  detalles:
+                    cbu_alias: "0170001234567890123456"
+                    titular: "Juan Perez"
+                    banco: "Banco Galicia"
+      responses:
+        "201":
+          description: Medio de pago agregado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "pago-uuid-789"
+                  mensaje:
+                    type: string
+                    example: "Medio de pago agregado correctamente"
+                  estado:
+                    type: string
+                    enum: [VERIFICADA, EN_REVISION, RECHAZADA]
+        "400":
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /billetera/medios-pago/{id}:
+    delete:
+      tags:
+        - 4. Billetera y Pagos
+      summary: Eliminar Medio de Pago
+      description: |
+        Elimina un medio de pago vinculado a la cuenta.
+        No se puede eliminar si es el único medio de pago o si hay pagos pendientes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del medio de pago a eliminar
+          required: true
+          schema:
+            type: string
+            example: "pago-uuid-123"
+      responses:
+        "200":
+          description: Eliminado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Medio de pago eliminado correctamente"
+        "400":
+          description: No se puede eliminar (es el único o tiene pagos pendientes)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unico_medio:
+                  value:
+                    error: "No puedes eliminar tu único medio de pago"
+                    codigo: "UNICO_MEDIO_PAGO"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Medio de pago no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 5. MOTOR DE PUJAS
+  # ==========================================
+
+  /items/{id}/pujas:
+    get:
+      tags:
+        - 5. Motor de Pujas
+      summary: Historial y estado de pujas del artículo
+      description: |
+        Endpoint de consulta rápida para obtener:
+        - Oferta actual más alta
+        - Tiempo restante de la subasta
+        - Historial completo de pujas
+        - Total de participantes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del artículo/ítem
+          required: true
+          schema:
+            type: string
+            example: "uuid-item-442"
+      responses:
+        "200":
+          description: Historial de pujas obtenido correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstadoPujas"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artículo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pujas:
+    post:
+      tags:
+        - 5. Motor de Pujas
+      summary: Realizar una Puja
+      description: |
+        Registra una nueva oferta sobre un artículo en subasta.
+        Valida que el monto sea mayor al actual y que el usuario
+        tenga fondos o garantías suficientes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RealizarPujaRequest"
+            examples:
+              puja_normal:
+                summary: Puja estándar
+                value:
+                  item_id: "uuid-item-442"
+                  monto_ofertado: 51000000
+      responses:
+        "201":
+          description: Puja registrada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Puja registrada correctamente"
+                  puja_id:
+                    type: string
+                    example: "puja-uuid-001"
+                  oferta_actual:
+                    type: number
+                    example: 51000000
+                  posicion:
+                    type: string
+                    enum: [GANANDO, SUPERADO]
+                    example: "GANANDO"
+        "400":
+          description: Monto insuficiente o puja inválida
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                monto_bajo:
+                  value:
+                    error: "El monto debe ser mayor a la oferta actual"
+                    codigo: "MONTO_INSUFICIENTE"
+                    monto_minimo: 50600000
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Usuario restringido o sin garantías suficientes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artículo no encontrado o subasta cerrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 6. PERFIL Y CUENTA
+  # ==========================================
+
+  /perfil:
+    get:
+      tags:
+        - 6. Perfil y Cuenta
+      summary: Obtener Datos del Perfil
+      description: |
+        Devuelve toda la información del perfil del usuario actual:
+        - Datos personales
+        - Configuración de cuenta
+        - Cuenta de cobro (si es vendedor)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil obtenido correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerfilUsuario"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - 6. Perfil y Cuenta
+      summary: Actualizar Perfil
+      description: |
+        Actualiza la información del perfil del usuario.
+        Solo los campos enviados serán actualizados.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre_completo:
+                  type: string
+                  example: "Juan Pérez Actualizado"
+                telefono:
+                  type: string
+                  example: "+5491112345678"
+                direccion:
+                  type: string
+                  example: "Av. Corrientes 1234"
+      responses:
+        "200":
+          description: Perfil actualizado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Perfil actualizado correctamente"
+        "400":
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /perfil/estadisticas:
+    get:
+      tags:
+        - 6. Perfil y Cuenta
+      summary: Estadísticas del Usuario
+      description: |
+        Devuelve las estadísticas de participación del usuario en la plataforma:
+        - Subastas en las que participó
+        - Lotes ganados
+        - Total de pujas realizadas
+        - Inversión total
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Estadísticas obtenidas correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstadisticasUsuario"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /perfil/restricciones:
+    get:
+      tags:
+        - 6. Perfil y Cuenta
+      summary: Ver Restricciones Activas
+      description: |
+        Muestra si el usuario tiene restricciones activas para participar en subastas,
+        incluyendo el motivo y el monto a regularizar.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Estado de restricciones obtenido.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestriccionesUsuario"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 7. NOTIFICACIONES
+  # ==========================================
+
+  /notificaciones:
+    get:
+      tags:
+        - 7. Notificaciones
+      summary: Listar Notificaciones
+      description: |
+        Devuelve las notificaciones del usuario ordenadas por fecha.
+        Incluye eventos de pujas, adjudicaciones, pagos, etc.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: no_leidas
+          in: query
+          description: Filtrar solo notificaciones no leídas
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: limite
+          in: query
+          description: Número máximo de notificaciones
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: Notificaciones obtenidas correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notificaciones:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notificacion"
+                  total_no_leidas:
+                    type: integer
+                    example: 5
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notificaciones/{id}/leer:
+    post:
+      tags:
+        - 7. Notificaciones
+      summary: Marcar como Leída
+      description: Marca una notificación específica como leída.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID de la notificación
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Notificación marcada como leída.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Notificación marcada como leída"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Notificación no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 8. CHECKOUT Y LIQUIDACIÓN
+  # ==========================================
+
+  /checkout/mis-ganancias:
+    get:
+      tags:
+        - 8. Checkout y Liquidación
+      summary: Ver Lotes Ganados Pendientes de Pago
+      description: |
+        Muestra todos los lotes que el usuario ganó y aún no pagó,
+        con el detalle de montos y plazos.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lotes ganados obtenidos correctamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lotes_ganados:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LoteGanado"
+                  total_a_pagar:
+                    type: number
+                    example: 125000000
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkout/{id}/pagar:
+    post:
+      tags:
+        - 8. Checkout y Liquidación
+      summary: Pagar un Lote Ganado
+      description: |
+        Procesa el pago de un lote ganado utilizando el medio de pago
+        predeterminado del usuario.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del lote ganado
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PagarLoteRequest"
+      responses:
+        "200":
+          description: Pago procesado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Pago procesado correctamente"
+                  comprobante_id:
+                    type: string
+                    example: "comprobante-uuid-001"
+                  estado_pago:
+                    type: string
+                    enum: [APROBADO, EN_PROCESO, RECHAZADO]
+        "400":
+          description: Error en el pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lote no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checkout/{id}/coordinar-entrega:
+    post:
+      tags:
+        - 8. Checkout y Liquidación
+      summary: Coordinar Retiro/Entrega
+      description: |
+        Permite al usuario seleccionar el método de entrega
+        (retiro en punto, envío a domicilio, etc.) para un lote pagado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del lote
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                metodo_entrega:
+                  type: string
+                  enum: [RETIRO_PUNTO, ENVIO_DOMICILIO, RETIRO_SUCURSAL]
+                  example: ENVIO_DOMICILIO
+                direccion_entrega:
+                  type: string
+                  example: "Av. Santa Fe 1234, CABA"
+                fecha_preferida:
+                  type: string
+                  format: date
+                  example: "2026-05-15"
+      responses:
+        "200":
+          description: Entrega coordinada exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Entrega coordinada correctamente"
+                  tracking_id:
+                    type: string
+                    example: "track-uuid-001"
+        "400":
+          description: Datos de entrega inválidos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Lote no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ==========================================
+  # 9. VENDEDOR (MIS BIENES)
+  # ==========================================
+
+  /vendedor/mis-articulos:
+    get:
+      tags:
+        - 9. Vendedor (Mis Bienes)
+      summary: Listar Artículos en Venta
+      description: |
+        Muestra todos los artículos que el usuario tiene publicados para venta,
+        con su estado actual y estadísticas de pujas.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: estado
+          in: query
+          description: Filtrar por estado del artículo
+          required: false
+          schema:
+            type: string
+            enum: [EN_SUBASTA, VENDIDO, RETIRADO]
+      responses:
+        "200":
+          description: Artículos obtenidos correctamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ArticuloVendedor"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - 9. Vendedor (Mis Bienes)
+      summary: Publicar Nuevo Artículo
+      description: |
+        Permite al vendedor publicar un nuevo artículo para subasta.
+        Requiere título, descripción, imágenes y precio base.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - titulo
+                - descripcion
+                - categoria_id
+                - precio_base
+              properties:
+                titulo:
+                  type: string
+                  example: "Ferrari 488 GTB 2018"
+                descripcion:
+                  type: string
+                  example: "Vehículo en excelente estado..."
+                categoria_id:
+                  type: integer
+                  example: 5
+                precio_base:
+                  type: number
+                  example: 45000000
+                imagenes:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                ficha_tecnica:
+                  type: string
+                  description: JSON con detalles técnicos
+      responses:
+        "201":
+          description: Artículo publicado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Artículo publicado correctamente"
+                  articulo_id:
+                    type: string
+                    example: "uuid-item-999"
+                  estado:
+                    type: string
+                    enum: [EN_REVISION, APROBADO, RECHAZADO]
+        "400":
+          description: Datos inválidos o incompletos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Usuario no autorizado como vendedor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vendedor/mis-articulos/{id}:
+    delete:
+      tags:
+        - 9. Vendedor (Mis Bienes)
+      summary: Retirar Artículo de Venta
+      description: |
+        Retira un artículo de la subasta (solo si no tiene pujas activas).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: ID del artículo
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Artículo retirado exitosamente.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Artículo retirado de la subasta"
+        "400":
+          description: No se puede retirar (tiene pujas activas)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: No es el propietario del artículo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Artículo no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+# ==========================================
+# COMPONENTES REUTILIZABLES
+# ==========================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT obtenido tras login exitoso.
+        Incluir en header como: Authorization: Bearer {token}
+
+  schemas:
+    # ==========================================
+    # SCHEMAS DE REQUEST
+    # ==========================================
+
+    RegistroPaso1Request:
+      type: object
+      required:
+        - nombre_completo
+        - documento
+        - direccion
+        - pais_residencia
+        - email
+      properties:
+        nombre_completo:
+          type: string
+          example: Milagros Peledrotti
+          minLength: 3
+          maxLength: 100
+        documento:
+          type: string
+          example: "35111222"
+          description: DNI, CI, o documento equivalente
+        direccion:
+          type: string
+          example: Av. Alvear 1820
+          minLength: 5
+        pais_residencia:
+          type: string
+          example: Argentina
+        email:
+          type: string
+          format: email
+          example: usuario@mail.com
+
+    RegistroPaso2Request:
+      type: object
+      required:
+        - registro_id
+        - password
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        password:
+          type: string
+          format: password
+          example: "MiClave123!"
+          minLength: 8
+          description: Debe contener al menos 8 caracteres, una mayúscula y un número
+
+    RegistroPaso3Request:
+      type: object
+      required:
+        - registro_id
+        - dni_frente
+        - dni_dorso
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        dni_frente:
+          type: string
+          format: binary
+          description: Imagen del frente del DNI (JPG, PNG, PDF)
+        dni_dorso:
+          type: string
+          format: binary
+          description: Imagen del dorso del DNI (JPG, PNG, PDF)
+
+    RegistroPaso4Request:
+      type: object
+      required:
+        - registro_id
+        - tipo_pago
+        - detalles
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        tipo_pago:
+          type: string
+          enum: [CUENTA_BANCARIA, TARJETA, CHEQUE]
+        detalles:
+          oneOf:
+            - $ref: "#/components/schemas/DetallesCuentaBancaria"
+            - $ref: "#/components/schemas/DetallesTarjeta"
+            - $ref: "#/components/schemas/DetallesCheque"
+          discriminator:
+            propertyName: tipo_pago
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: usuario@mail.com
+        password:
+          type: string
+          format: password
+          example: "MiClave123!"
+
+    RecuperarClaveRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: usuario@mail.com
+
+    AgregarMedioPagoRequest:
+      type: object
+      required:
+        - tipo_pago
+        - detalles
+      properties:
+        tipo_pago:
+          type: string
+          enum: [CUENTA_BANCARIA, TARJETA, CHEQUE]
+        detalles:
+          type: object
+          description: Objeto con detalles específicos según el tipo de pago
+
+    RealizarPujaRequest:
+      type: object
+      required:
+        - item_id
+        - monto_ofertado
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-442
+        monto_ofertado:
+          type: number
+          example: 51000000
+          minimum: 0
+          description: Monto en la moneda local (pesos argentinos)
+
+    PagarLoteRequest:
+      type: object
+      properties:
+        metodo_entrega_id:
+          type: string
+          description: ID del método de entrega seleccionado
+
+    # ==========================================
+    # SCHEMAS DE RESPONSE
+    # ==========================================
+
+    RegistroPaso1Response:
+      type: object
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+          description: ID del registro temporal creado
+        mensaje:
+          type: string
+          example: "Registro creado. Continúe con el paso 2."
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          description: Token JWT para autenticación
+        usuario_id:
+          type: string
+          example: "uuid-user-001"
+        nombre:
+          type: string
+          example: "Milagros Peledrotti"
+        email:
+          type: string
+          example: "usuario@mail.com"
+
+    Pais:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: Argentina
+        codigo_iso:
+          type: string
+          example: AR
+          description: Código ISO 3166-1 alpha-2
+
+    Banco:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: Banco Galicia
+        codigo:
+          type: string
+          example: "007"
+          description: Código de banco según BCRA
+
+    Categoria:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: Arte
+        icono_url:
+          type: string
+          format: uri
+          example: https://cdn.rematix.com/icons/arte.svg
+
+    SubastaResumen:
+      type: object
+      properties:
+        subasta_id:
+          type: string
+          example: uuid-sub-002
+        titulo:
+          type: string
+          example: Colección de Artículos de Lujo
+        imagen_portada:
+          type: string
+          format: uri
+          example: https://bucket.com/arte.jpg
+        cantidad_articulos:
+          type: integer
+          example: 15
+        ubicacion:
+          type: string
+          example: "Buenos Aires, Argentina"
+        estado:
+          type: string
+          enum: [EN_VIVO, PROXIMAMENTE, FINALIZADA]
+          example: EN_VIVO
+        nivel_requerido:
+          type: string
+          enum: [BASE, ORO, PLATINO]
+          example: BASE
+          description: Nivel mínimo de usuario requerido para participar
+        fecha_inicio:
+          type: string
+          format: date-time
+        fecha_fin:
+          type: string
+          format: date-time
+
+    ArticuloResumen:
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-042
+        numero_lote:
+          type: string
+          example: LOTE 042
+        titulo:
+          type: string
+          example: Ferrari 488 GTB
+        imagen_principal:
+          type: string
+          format: uri
+          example: https://bucket.com/ferrari.jpg
+        estado:
+          type: string
+          example: EN VIVO
+        tiempo_restante:
+          type: string
+          example: "02h 15m"
+          description: Tiempo restante en formato legible
+        oferta_actual:
+          type: number
+          example: 50500000
+        es_favorito:
+          type: boolean
+          example: false
+
+    ArticuloDetalle:
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-442
+        numero_lote:
+          type: string
+          example: "LOTE #442"
+        titulo:
+          type: string
+          example: Ferrari 488 GTB
+        propietario:
+          type: string
+          example: Luis Gerli
+        descripcion:
+          type: string
+          example: "Obra maestra de Maranello en perfecto estado de conservación..."
+        imagenes:
+          type: array
+          items:
+            type: string
+            format: uri
+          example:
+            - https://bucket.com/ferrari-1.jpg
+            - https://bucket.com/ferrari-2.jpg
+        ficha_tecnica:
+          type: object
+          additionalProperties: true
+          example:
+            Motor: "3.9L V8 Twin-Turbo"
+            Potencia: "661 HP"
+            Año: 2018
+            Kilometraje: "12,000 km"
+        precio_base:
+          type: number
+          example: 45000000
+        oferta_actual:
+          type: number
+          example: 50500000
+        estado_subasta:
+          type: string
+          enum: [ACTIVA, PAUSADA, FINALIZADA]
+        tiempo_restante:
+          type: string
+          example: "02h 15m"
+
+    MedioPago:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pago-uuid-123
+        tipo_pago:
+          type: string
+          enum: [TARJETA, CUENTA_BANCARIA, CHEQUE]
+        descripcion_corta:
+          type: string
+          example: "Tarjeta Visa **** 4242"
+        estado:
+          type: string
+          enum: [VERIFICADA, EN_REVISION, RECHAZADA]
+        es_principal:
+          type: boolean
+          example: true
+          description: Indica si es el medio de pago predeterminado
+
+    EstadoPujas:
+      type: object
+      properties:
+        oferta_actual:
+          type: number
+          example: 50500000
+        tiempo_restante:
+          type: string
+          example: "02h 15m"
+        total_pujas:
+          type: integer
+          example: 12
+        total_participantes:
+          type: integer
+          example: 8
+        historial:
+          type: array
+          items:
+            $ref: "#/components/schemas/PujaHistorial"
+
+    PujaHistorial:
+      type: object
+      properties:
+        nombre_postor:
+          type: string
+          example: "Usuario #882"
+          description: Nombre anonimizado del postor
+        foto_postor:
+          type: string
+          format: uri
+          example: https://bucket.com/avatar.jpg
+        monto:
+          type: number
+          example: 45100000
+        fecha:
+          type: string
+          format: date-time
+
+    PerfilUsuario:
+      type: object
+      properties:
+        usuario:
+          type: object
+          properties:
+            id:
+              type: string
+              example: uuid-user-001
+            nombre_completo:
+              type: string
+              example: Milagros Peledrotti
+            email:
+              type: string
+              example: usuario@mail.com
+            nivel:
+              type: string
+              enum: [BASE, ORO, PLATINO]
+              example: ORO
+        datos_personales:
+          type: object
+          properties:
+            documento:
+              type: string
+              example: "35111222"
+            telefono:
+              type: string
+              example: "+5491112345678"
+            direccion:
+              type: string
+              example: "Av. Alvear 1820"
+            pais_residencia:
+              type: string
+              example: Argentina
+        cuenta_cobro:
+          type: object
+          nullable: true
+          description: Solo para vendedores
+          properties:
+            cbu_alias:
+              type: string
+              example: "0170001234567890123456"
+            banco:
+              type: string
+              example: Banco Galicia
+
+    EstadisticasUsuario:
+      type: object
+      properties:
+        subastas_asistidas:
+          type: integer
+          example: 42
+          description: Total de subastas en las que participó
+        lotes_ganados:
+          type: integer
+          example: 12
+        pujas_realizadas:
+          type: integer
+          example: 156
+        inversion_total:
+          type: number
+          example: 2110111
+          description: Monto total invertido en pesos
+
+    RestriccionesUsuario:
+      type: object
+      properties:
+        tiene_restricciones:
+          type: boolean
+          example: false
+        restriccion:
+          type: object
+          nullable: true
+          properties:
+            motivo:
+              type: string
+              example: "Falta de Pago"
+            lote_adeudado:
+              type: string
+              example: "Lote #055"
+            monto_original:
+              type: number
+              example: 10250000
+            monto_multa:
+              type: number
+              example: 1025000
+            total_a_regularizar:
+              type: number
+              example: 11275000
+            fecha_limite_legal:
+              type: string
+              format: date-time
+
+    Notificacion:
+      type: object
+      properties:
+        id_evento:
+          type: string
+          example: "notif-uuid-001"
+        tipo_evento:
+          type: string
+          enum: [ADJUDICADO, PUJA_ACTIVA, PUJA_SUPERADA, PAGO_PENDIENTE, ENTREGA_COORDINADA]
+        titulo_lote:
+          type: string
+          example: "Ferrari 488 GTB"
+        fecha_texto:
+          type: string
+          example: "Hace 2 horas"
+        monto:
+          type: number
+          nullable: true
+          example: 50500000
+        etiqueta_monto:
+          type: string
+          nullable: true
+          example: "Ganaste por"
+        leida:
+          type: boolean
+          example: false
+
+    LoteGanado:
+      type: object
+      properties:
+        lote_id:
+          type: string
+          example: "lote-uuid-001"
+        numero_lote:
+          type: string
+          example: "LOTE #042"
+        titulo:
+          type: string
+          example: "Ferrari 488 GTB"
+        imagen:
+          type: string
+          format: uri
+        monto_ganado:
+          type: number
+          example: 50500000
+        comision:
+          type: number
+          example: 5050000
+        total_a_pagar:
+          type: number
+          example: 55550000
+        fecha_limite_pago:
+          type: string
+          format: date-time
+        estado_pago:
+          type: string
+          enum: [PENDIENTE, PAGADO, VENCIDO]
+
+    ArticuloVendedor:
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-999
+        titulo:
+          type: string
+          example: "Rolex Submariner"
+        imagen_principal:
+          type: string
+          format: uri
+        precio_base:
+          type: number
+          example: 15000000
+        oferta_actual:
+          type: number
+          example: 18500000
+        total_pujas:
+          type: integer
+          example: 7
+        estado:
+          type: string
+          enum: [EN_REVISION, EN_SUBASTA, VENDIDO, RETIRADO]
+        fecha_publicacion:
+          type: string
+          format: date-time
+
+    # ==========================================
+    # SCHEMAS DE DETALLES DE PAGO
+    # ==========================================
+
+    DetallesCuentaBancaria:
+      type: object
+      required:
+        - cbu_alias
+        - titular
+      properties:
+        cbu_alias:
+          type: string
+          example: "0170001234567890123456"
+          description: CBU o Alias de la cuenta
+        titular:
+          type: string
+          example: "Milagros Peledrotti"
+        banco:
+          type: string
+          example: "Banco Galicia"
+
+    DetallesTarjeta:
+      type: object
+      required:
+        - numero_tarjeta
+        - cvv
+      properties:
+        numero_tarjeta:
+          type: string
+          example: "4242424242424242"
+          minLength: 13
+          maxLength: 19
+        cvv:
+          type: string
+          example: "123"
+          minLength: 3
+          maxLength: 4
+        fecha_expiracion:
+          type: string
+          example: "12/25"
+          pattern: '^\d{2}/\d{2}$'
+        titular:
+          type: string
+          example: "MILAGROS PELEDROTTI"
+
+    DetallesCheque:
+      type: object
+      required:
+        - numero_cheque
+        - banco_emisor
+      properties:
+        numero_cheque:
+          type: string
+          example: "12345678"
+        banco_emisor:
+          type: string
+          example: "Banco Galicia"
+        fecha_emision:
+          type: string
+          format: date
+
+    # ==========================================
+    # SCHEMAS DE ERROR
+    # ==========================================
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Descripción del error"
+          description: Mensaje de error legible para el usuario
+        codigo:
+          type: string
+          example: "ERROR_CODE"
+          description: Código de error para manejo programático
+        detalles:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Información adicional del error
+      required:
+        - error
