@@ -1,0 +1,1125 @@
+openapi: 3.0.0
+info:
+  title: Rematix - Desarrollo de Aplicaciones
+  description: API RESTful para la plataforma de subastas Rematix. Documentación del Trabajo Práctico.
+  version: 1.0.3
+servers:
+- url: http://api.rematix.com/v1
+tags:
+- name: 1. Autenticación y Registro
+- name: 2. Home y Exploración
+- name: 3. Catálogo e Ítems
+- name: 4. Billetera y Pagos
+- name: 5. Motor de Pujas
+- name: 6. Perfil y Cuenta
+- name: 7. Notificaciones
+- name: 8. Checkout y Liquidación
+- name: 9. Vendedor (Mis Bienes)
+paths:
+  /auth/registro/paso1:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: "Paso 1: Datos Personales"
+      description: Recibe la info de la primera pantalla y crea un registro temporal.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/registro_paso1_body"
+        required: true
+      responses:
+        "201":
+          description: Creado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_201"
+  /auth/registro/paso2:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: "Paso 2: Creación de Contraseña"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/registro_paso2_body"
+        required: true
+      responses:
+        "200":
+          description: Contraseña asociada.
+  /auth/registro/paso3:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: "Paso 3: Validación de Identidad"
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/registro_paso3_body"
+        required: true
+      responses:
+        "200":
+          description: Identidad validada.
+  /auth/registro/paso4-pago:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: "Paso 4: Agregar Medio de Pago Inicial"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/registro_paso4pago_body"
+        required: true
+      responses:
+        "201":
+          description: Pago vinculado. Registro finalizado.
+  /auth/login:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: Iniciar Sesión
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/auth_login_body"
+        required: true
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200"
+  /auth/logout:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: Cerrar Sesión
+      responses:
+        "200":
+          description: Sesión cerrada.
+        "401":
+          description: Token inválido.
+      security:
+      - bearerAuth: []
+  /auth/recuperar-clave:
+    post:
+      tags:
+      - 1. Autenticación y Registro
+      summary: Recuperar Contraseña
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/auth_recuperarclave_body"
+        required: true
+      responses:
+        "200":
+          description: Email enviado.
+  /paises:
+    get:
+      tags:
+      - 1. Autenticación y Registro
+      summary: Catálogo de Países
+      description: Lista estática para desplegables.
+      responses:
+        "200":
+          description: OK
+      security: []
+  /bancos:
+    get:
+      tags:
+      - 1. Autenticación y Registro
+      summary: Catálogo de Bancos
+      description: Lista estática para desplegables.
+      responses:
+        "200":
+          description: OK
+      security: []
+  /categorias:
+    get:
+      tags:
+      - 2. Home y Exploración
+      summary: Obtener Categorías
+      description: "Devuelve la lista de categorías (Arte, Joyería, Relojes, etc.)."
+      responses:
+        "200":
+          description: Lista de categorías.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_1"
+      security:
+      - bearerAuth: []
+  /subastas:
+    get:
+      tags:
+      - 2. Home y Exploración
+      summary: Explorador completo de subastas
+      description: Devuelve el listado completo de subastas. Sirve para el Feed de Home y para la pestaña de Exploración.
+      parameters:
+      - name: categoria_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        "200":
+          description: Listado obtenido correctamente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_2"
+      security:
+      - bearerAuth: []
+  /subastas/{id}/catalogo:
+    get:
+      tags:
+      - 3. Catálogo e Ítems
+      summary: Obtener artículos de una subasta
+      description: Lista de lotes de una subasta para la vista de catálogo.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: "Buscador (ej: 'Ferrari')"
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Catálogo cargado.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_3"
+      security:
+      - bearerAuth: []
+  /items/{id}:
+    get:
+      tags:
+      - 3. Catálogo e Ítems
+      summary: Detalle completo del artículo
+      description: "Devuelve la ficha técnica, imágenes estáticas y descripción."
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Detalles del ítem.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_4"
+      security:
+      - bearerAuth: []
+  /items/{id}/favorito:
+    post:
+      tags:
+      - 3. Catálogo e Ítems
+      summary: Alternar Favorito (Corazón)
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Estado de favorito actualizado.
+      security:
+      - bearerAuth: []
+  /billetera/medios-pago:
+    get:
+      tags:
+      - 4. Billetera y Pagos
+      summary: Listar Medios de Pago
+      responses:
+        "200":
+          description: Listado obtenido.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_5"
+      security:
+      - bearerAuth: []
+    post:
+      tags:
+      - 4. Billetera y Pagos
+      summary: Agregar Nuevo Medio de Pago
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/billetera_mediospago_body"
+        required: true
+      responses:
+        "201":
+          description: Medio de pago agregado.
+      security:
+      - bearerAuth: []
+  /billetera/medios-pago/{id}:
+    delete:
+      tags:
+      - 4. Billetera y Pagos
+      summary: Eliminar Medio de Pago
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Eliminado exitosamente.
+      security:
+      - bearerAuth: []
+  /items/{id}/pujas:
+    get:
+      tags:
+      - 5. Motor de Pujas
+      summary: Historial y estado de pujas del artículo
+      description: Endpoint de consulta rápida para el contador de tiempo y la oferta ganadora.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Historial de pujas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_6"
+      security:
+      - bearerAuth: []
+  /pujas:
+    post:
+      tags:
+      - 5. Motor de Pujas
+      summary: Realizar una oferta (Pujar)
+      description: Registra una nueva puja validando que supere a la oferta actual.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/pujas_body"
+        required: true
+      responses:
+        "201":
+          description: Puja registrada exitosamente.
+        "400":
+          description: El monto es menor a la oferta actual.
+      security:
+      - bearerAuth: []
+  /perfil:
+    get:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Obtener datos del perfil del usuario
+      responses:
+        "200":
+          description: Perfil cargado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_7"
+      security:
+      - bearerAuth: []
+  /perfil/cuenta-cobro:
+    put:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Actualizar Cuenta de Cobro
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/perfil_cuentacobro_body"
+        required: true
+      responses:
+        "200":
+          description: Actualizado.
+      security:
+      - bearerAuth: []
+  /perfil/metricas:
+    get:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Obtener KPIs del usuario
+      responses:
+        "200":
+          description: Métricas calculadas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_8"
+      security:
+      - bearerAuth: []
+  /perfil/historial:
+    get:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Feed del historial de participación
+      parameters:
+      - name: limite
+        in: query
+        required: false
+        schema:
+          type: integer
+          example: 10
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          example: 0
+      responses:
+        "200":
+          description: Historial obtenido.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_9"
+      security:
+      - bearerAuth: []
+  /perfil/estado-cuenta:
+    get:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Consultar estado y restricciones
+      responses:
+        "200":
+          description: Estado de cuenta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_10"
+      security:
+      - bearerAuth: []
+  /perfil/estado-cuenta/regularizar:
+    post:
+      tags:
+      - 6. Perfil y Cuenta
+      summary: Pagar deuda y desbloquear cuenta
+      responses:
+        "200":
+          description: Deuda saldada.
+        "402":
+          description: Fondos insuficientes.
+      security:
+      - bearerAuth: []
+  /notificaciones:
+    get:
+      tags:
+      - 7. Notificaciones
+      summary: Bandeja de entrada
+      responses:
+        "200":
+          description: Notificaciones cargadas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_11"
+      security:
+      - bearerAuth: []
+  /notificaciones/{id}/leida:
+    put:
+      tags:
+      - 7. Notificaciones
+      summary: Marcar como leída
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+      security:
+      - bearerAuth: []
+  /checkout/lote/{id}:
+    get:
+      tags:
+      - 8. Checkout y Liquidación
+      summary: Resumen de liquidación
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Liquidación.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/inline_response_200_12"
+      security:
+      - bearerAuth: []
+  /checkout/lote/{id}/pagar:
+    post:
+      tags:
+      - 8. Checkout y Liquidación
+      summary: Procesar pago del lote
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/id_pagar_body"
+        required: true
+      responses:
+        "200":
+          description: Pago procesado.
+      security:
+      - bearerAuth: []
+  /bienes:
+    post:
+      tags:
+      - 9. Vendedor (Mis Bienes)
+      summary: Publicar un nuevo artículo
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/bienes_body"
+        required: true
+      responses:
+        "201":
+          description: Artículo guardado.
+      security:
+      - bearerAuth: []
+  /bienes/todos:
+    get:
+      tags:
+      - 9. Vendedor (Mis Bienes)
+      summary: Listar TODOS mis bienes
+      responses:
+        "200":
+          description: Lista completa.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_13"
+      security:
+      - bearerAuth: []
+  /bienes/activos:
+    get:
+      tags:
+      - 9. Vendedor (Mis Bienes)
+      summary: Listar bienes ACTIVOS
+      responses:
+        "200":
+          description: Lista de activos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_14"
+      security:
+      - bearerAuth: []
+  /bienes/en-revision:
+    get:
+      tags:
+      - 9. Vendedor (Mis Bienes)
+      summary: Listar bienes EN REVISIÓN
+      responses:
+        "200":
+          description: Lista en revisión.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_15"
+      security:
+      - bearerAuth: []
+  /bienes/vendidos:
+    get:
+      tags:
+      - 9. Vendedor (Mis Bienes)
+      summary: Listar bienes VENDIDOS
+      responses:
+        "200":
+          description: Lista de vendidos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/inline_response_200_16"
+      security:
+      - bearerAuth: []
+components:
+  schemas:
+    inline_response_200_11:
+      type: object
+      properties:
+        notificacion_id:
+          type: string
+        leida:
+          type: boolean
+        fecha_emision:
+          type: string
+          format: date-time
+        tipo_notificacion:
+          type: string
+          enum:
+          - GANADOR
+          - PUJA_SUPERADA
+          - CIERRE
+          - INICIO
+        titulo:
+          type: string
+        mensaje:
+          type: string
+        datos_accion:
+          type: object
+    perfil_cuentacobro_body:
+      type: object
+      properties:
+        banco:
+          type: string
+          example: BANCO MACRO
+        tipo_cuenta:
+          type: string
+          example: Caja de Ahorro
+        cbu:
+          type: string
+          example: "2850590940090418135201"
+        alias:
+          type: string
+          example: NUEVO.ALIAS
+    inline_response_200_10:
+      type: object
+      properties:
+        estado_cuenta:
+          type: string
+          enum:
+          - ACTIVA
+          - RESTRINGIDA
+        restriccion:
+          $ref: "#/components/schemas/inline_response_200_10_restriccion"
+    auth_recuperarclave_body:
+      type: object
+      properties:
+        email:
+          type: string
+    inline_response_200_13:
+      type: object
+      properties:
+        bien_id:
+          type: string
+        titulo:
+          type: string
+        estado:
+          type: string
+          example: EN_SUBASTA
+    inline_response_200_12:
+      type: object
+      properties:
+        lote:
+          type: object
+        desglose_financiero:
+          $ref: "#/components/schemas/inline_response_200_12_desglose_financiero"
+        metodos_entrega:
+          type: array
+          items:
+            type: object
+    registro_paso2_body:
+      required:
+      - password
+      - registro_id
+      type: object
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        password:
+          type: string
+          example: ClaveSegura123!
+    bienes_body:
+      required:
+      - categoria_id
+      - descripcion
+      - precio_reserva
+      - titulo
+      type: object
+      properties:
+        imagenes:
+          type: array
+          items:
+            type: string
+            format: binary
+        categoria_id:
+          type: integer
+          example: 3
+        titulo:
+          type: string
+        descripcion:
+          type: string
+        precio_reserva:
+          type: number
+    inline_response_200_15:
+      type: object
+      properties:
+        bien_id:
+          type: string
+        titulo:
+          type: string
+    inline_response_200_14:
+      type: object
+      properties:
+        bien_id:
+          type: string
+        titulo:
+          type: string
+        oferta_actual:
+          type: number
+    inline_response_200_16:
+      type: object
+      properties:
+        bien_id:
+          type: string
+        titulo:
+          type: string
+        precio_final:
+          type: number
+    inline_response_200_7_datos_personales:
+      type: object
+      properties:
+        correo:
+          type: string
+          example: milagrospeledrotti@mail.com
+        telefono:
+          type: string
+          example: +54 11 1234 1234
+        direccion_envio:
+          type: string
+          example: "Av. Alvear 1820, CABA"
+    inline_response_201:
+      type: object
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+    auth_login_body:
+      type: object
+      properties:
+        email:
+          type: string
+          example: usuario@mail.com
+        password:
+          type: string
+          example: clave123
+    inline_response_200:
+      type: object
+      properties:
+        token:
+          type: string
+        identificador:
+          type: integer
+    inline_response_200_12_desglose_financiero:
+      type: object
+      properties:
+        precio_ganador:
+          type: number
+          example: 585000
+        porcentaje_comision:
+          type: number
+          example: 10
+        monto_comision:
+          type: number
+          example: 58500
+        porcentaje_iva:
+          type: number
+          example: 21
+        monto_iva:
+          type: number
+          example: 12285
+        total_a_pagar:
+          type: number
+          example: 655785
+    inline_response_200_7_usuario:
+      type: object
+      properties:
+        nombre_completo:
+          type: string
+          example: Milagros Peledrotti
+        foto_perfil:
+          type: string
+          example: https://bucket.com/avatar.jpg
+        categoria:
+          type: string
+          example: PLATINO
+    inline_response_200_7_cuenta_cobro:
+      type: object
+      properties:
+        banco:
+          type: string
+          example: BANCO GALICIA
+        tipo_cuenta:
+          type: string
+          example: Cta. Corriente
+        cbu:
+          type: string
+          example: "0070032111690022200114"
+        alias:
+          type: string
+          example: ROSSI.ART.SUBASTA
+    inline_response_200_9:
+      type: object
+      properties:
+        id_evento:
+          type: string
+        tipo_evento:
+          type: string
+          enum:
+          - ADJUDICADO
+          - PUJA_ACTIVA
+          - PUJA_SUPERADA
+        titulo_lote:
+          type: string
+        fecha_texto:
+          type: string
+        monto:
+          type: number
+        etiqueta_monto:
+          type: string
+    inline_response_200_5:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pago-uuid-123
+        tipo_pago:
+          type: string
+          enum:
+          - TARJETA
+          - CUENTA_BANCARIA
+          - CHEQUE
+        descripcion_corta:
+          type: string
+          example: Tarjeta Visa **** 4242
+        estado:
+          type: string
+          enum:
+          - VERIFICADA
+          - EN_REVISION
+          - RECHAZADA
+    registro_paso3_body:
+      required:
+      - dni_dorso
+      - dni_frente
+      - registro_id
+      type: object
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        dni_frente:
+          type: string
+          format: binary
+        dni_dorso:
+          type: string
+          format: binary
+    inline_response_200_6:
+      type: object
+      properties:
+        oferta_actual:
+          type: number
+          example: 50500000
+        tiempo_restante:
+          type: string
+          example: 02h 15m
+        total_pujas:
+          type: integer
+          example: 12
+        historial:
+          type: array
+          items:
+            $ref: "#/components/schemas/inline_response_200_6_historial"
+    inline_response_200_7:
+      type: object
+      properties:
+        usuario:
+          $ref: "#/components/schemas/inline_response_200_7_usuario"
+        datos_personales:
+          $ref: "#/components/schemas/inline_response_200_7_datos_personales"
+        cuenta_cobro:
+          $ref: "#/components/schemas/inline_response_200_7_cuenta_cobro"
+    inline_response_200_8:
+      type: object
+      properties:
+        subastas_asistidas:
+          type: integer
+          example: 42
+        lotes_ganados:
+          type: integer
+          example: 12
+        pujas_realizadas:
+          type: integer
+          example: 156
+        inversion_total:
+          type: number
+          example: 2110111
+    id_pagar_body:
+      type: object
+      properties:
+        metodo_entrega_id:
+          type: string
+    billetera_mediospago_body:
+      required:
+      - detalles
+      - tipo_pago
+      type: object
+      properties:
+        tipo_pago:
+          type: string
+          enum:
+          - CUENTA_BANCARIA
+          - TARJETA
+          - CHEQUE
+        detalles:
+          type: object
+    registro_paso4pago_body:
+      required:
+      - detalles
+      - registro_id
+      - tipo_pago
+      type: object
+      properties:
+        registro_id:
+          type: integer
+          example: 105
+        tipo_pago:
+          type: string
+          enum:
+          - CUENTA_BANCARIA
+          - TARJETA
+          - CHEQUE
+        detalles:
+          oneOf:
+          - title: Cuenta Bancaria
+            type: object
+            properties:
+              cbu_alias:
+                type: string
+              titular:
+                type: string
+          - title: Tarjeta
+            type: object
+            properties:
+              numero_tarjeta:
+                type: string
+              cvv:
+                type: string
+    pujas_body:
+      required:
+      - item_id
+      - monto_ofertado
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-442
+        monto_ofertado:
+          type: number
+          example: 51000000
+    inline_response_200_10_restriccion:
+      type: object
+      properties:
+        motivo:
+          type: string
+          example: Falta de Pago
+        lote_adeudado:
+          type: string
+          example: "Lote #055"
+        monto_original:
+          type: number
+          example: 10250000
+        monto_multa:
+          type: number
+          example: 1025000
+        total_a_regularizar:
+          type: number
+          example: 11275000
+        fecha_limite_legal:
+          type: string
+          format: date-time
+    registro_paso1_body:
+      required:
+      - direccion
+      - documento
+      - email
+      - nombre_completo
+      - pais_residencia
+      type: object
+      properties:
+        nombre_completo:
+          type: string
+          example: Milagros Peledrotti
+        documento:
+          type: string
+          example: "35111222"
+        direccion:
+          type: string
+          example: Av. Alvear 1820
+        pais_residencia:
+          type: string
+          example: Argentina
+        email:
+          type: string
+          example: usuario@mail.com
+    inline_response_200_6_historial:
+      type: object
+      properties:
+        nombre_postor:
+          type: string
+          example: "Usuario #882"
+        foto_postor:
+          type: string
+          example: https://bucket.com/avatar.jpg
+        monto:
+          type: number
+          example: 45100000
+        fecha:
+          type: string
+          format: date-time
+    inline_response_200_1:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: Arte
+    inline_response_200_2:
+      type: object
+      properties:
+        subasta_id:
+          type: string
+          example: uuid-sub-002
+        titulo:
+          type: string
+          example: Colección de Artículos
+        imagen_portada:
+          type: string
+          example: https://bucket.com/arte.jpg
+        cantidad_articulos:
+          type: integer
+          example: 3
+        ubicacion:
+          type: string
+          example: "Buenos Aires, Argentina"
+        estado:
+          type: string
+          example: EN_VIVO
+          enum:
+          - EN_VIVO
+          - PROXIMAMENTE
+          - FINALIZADA
+        nivel_requerido:
+          type: string
+          example: BASE
+          enum:
+          - BASE
+          - ORO
+          - PLATINO
+    inline_response_200_3:
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-042
+        numero_lote:
+          type: string
+          example: LOTE 042
+        titulo:
+          type: string
+          example: Ferrari 488 GTB
+        imagen_principal:
+          type: string
+          example: https://bucket.com/ferrari.jpg
+        estado:
+          type: string
+          example: EN VIVO
+        tiempo_restante:
+          type: string
+          example: 02h 15m
+        oferta_actual:
+          type: number
+          example: 50500000
+        es_favorito:
+          type: boolean
+          example: false
+    inline_response_200_4:
+      type: object
+      properties:
+        item_id:
+          type: string
+          example: uuid-item-442
+        numero_lote:
+          type: string
+          example: "LOTE #442"
+        titulo:
+          type: string
+          example: Ferrari 488 GTB
+        propietario:
+          type: string
+          example: Luis Gerli
+        descripcion:
+          type: string
+          example: Obra maestra de Maranello...
+        imagenes:
+          type: array
+          items:
+            type: string
+        ficha_tecnica:
+          type: object
+          example:
+            Motor: 3.9L V8 Twin-Turbo
+            Potencia: 661 HP
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
