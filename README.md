@@ -8,7 +8,7 @@ Este repositorio contiene la arquitectura técnica y el diseño de experiencia d
 El diseño visual se centra en una estética **minimalista, profesional y elegante**, optimizada para dispositivos Mac y móviles.
 
 * **Diseño de Pantallas:** [Link al Figma de las pantallas](TU_LINK_DE_FIGMA_AQUÍ)
-* **Prototipo Interactivo:** [Link al Prototipo en Figma](TU_LINK_DEL_PROTOTIPO_AQUÍ)
+* **Prototipo Interactivo:** [Link al Prototipo en Figma](https://www.figma.com/proto/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
 
 ---
 
