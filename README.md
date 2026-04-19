@@ -18,7 +18,7 @@ La comunicación entre el frontend y el backend está definida mediante el está
 ### 🚀 Acceso Rápido
 Para explorar los endpoints, parámetros y modelos de datos de forma interactiva, hacé clic abajo:
 
-👉 [**ABRIR SWAGGER INTERACTIVO**](https://petstore.swagger.io/?url=TU_URL_RAW_AQUÍ)
+👉 [**ABRIR SWAGGER INTERACTIVO**](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/rufinoratti/desarrollo-apps/refs/heads/main/rematix-api.yaml)
 
 
 ---
