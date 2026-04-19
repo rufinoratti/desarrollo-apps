@@ -20,24 +20,9 @@ Para explorar los endpoints, parámetros y modelos de datos de forma interactiva
 
 👉 [**ABRIR SWAGGER INTERACTIVO**](https://petstore.swagger.io/?url=TU_URL_RAW_AQUÍ)
 
----
-
-## 📋 Estructura del Proyecto
-El contrato de la API (`rematix-api.yaml`) incluye:
-
-| Módulo | Descripción |
-| :--- | :--- |
-| **Autenticación** | Registro en 4 pasos con validación de identidad. |
-| **Motor de Pujas** | Gestión de ofertas en tiempo real y estados de subasta. |
-| **Billetera** | Integración de múltiples medios de pago y gestión de fondos. |
-| **Vendedor** | Flujo completo de publicación y revisión de bienes. |
 
 ---
 
 ## 🛠️ Tecnologías Definidas
 * **Diseño:** Figma
 * **Especificación:** OpenAPI 3.0 (Swagger)
-* **Entorno:** Producción y Staging (definidos en el archivo YAML)
-
----
-*Desarrollado para el Trabajo Práctico de la Facultad - 2026*
