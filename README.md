@@ -1,12 +1,43 @@
-# Rematix - Entrega de Arquitectura API
+# 🔨 Rematix - Plataforma de Subastas de Lujo
 
-Este repositorio contiene la definición de la API para el proyecto Rematix.
+Este repositorio contiene la arquitectura técnica y el diseño de experiencia de usuario para **Rematix**, una aplicación móvil de subastas de alta gama desarrollada para la facultad.
 
-## 🚀 Documentación Interactiva
-Para ver los métodos, parámetros y modelos de forma visual, hacé clic en el siguiente enlace:
+---
 
-👉 [VER SWAGGER INTERACTIVO](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/rufinoratti/desarrollo-apps/refs/heads/main/rematix-api.yaml)
+## 🎨 Diseño y Prototipado (Figma)
+El diseño visual se centra en una estética **minimalista, profesional y elegante**, optimizada para dispositivos Mac y móviles.
 
-## 📁 Archivo Fuente
-El contrato de la API está definido en el archivo `rematix-api.yaml` utilizando el estándar OpenAPI 3.0.
+* **Diseño de Pantallas:** [Link al Figma de las pantallas](TU_LINK_DE_FIGMA_AQUÍ)
+* **Prototipo Interactivo:** [Link al Prototipo en Figma](TU_LINK_DEL_PROTOTIPO_AQUÍ)
 
+---
+
+## ⚙️ Documentación de la API (Swagger)
+La comunicación entre el frontend y el backend está definida mediante el estándar **OpenAPI 3.0**. Se dividió la lógica en 9 módulos funcionales para garantizar la escalabilidad.
+
+### 🚀 Acceso Rápido
+Para explorar los endpoints, parámetros y modelos de datos de forma interactiva, hacé clic abajo:
+
+👉 [**ABRIR SWAGGER INTERACTIVO**](https://petstore.swagger.io/?url=TU_URL_RAW_AQUÍ)
+
+---
+
+## 📋 Estructura del Proyecto
+El contrato de la API (`rematix-api.yaml`) incluye:
+
+| Módulo | Descripción |
+| :--- | :--- |
+| **Autenticación** | Registro en 4 pasos con validación de identidad. |
+| **Motor de Pujas** | Gestión de ofertas en tiempo real y estados de subasta. |
+| **Billetera** | Integración de múltiples medios de pago y gestión de fondos. |
+| **Vendedor** | Flujo completo de publicación y revisión de bienes. |
+
+---
+
+## 🛠️ Tecnologías Definidas
+* **Diseño:** Figma
+* **Especificación:** OpenAPI 3.0 (Swagger)
+* **Entorno:** Producción y Staging (definidos en el archivo YAML)
+
+---
+*Desarrollado para el Trabajo Práctico de la Facultad - 2026*
