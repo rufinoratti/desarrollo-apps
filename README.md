@@ -9,7 +9,6 @@ El diseño visual se centra en una estética **minimalista, profesional y elegan
 
 * **Diseño de Pantallas:** [Link al Figma de las pantallas](https://www.figma.com/design/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
 * **Prototipo Interactivo:** [Link al Prototipo en Figma](https://www.figma.com/proto/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
-* **Prototipo Iphone 16:** [Link al Prototipo en Figma](https://www.figma.com/proto/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
 
 ---
 
