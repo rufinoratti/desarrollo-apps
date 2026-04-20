@@ -1,11 +1,11 @@
 # 🔨 Rematix - Plataforma de Subastas de Lujo
 
-Este repositorio contiene la arquitectura técnica y el diseño de experiencia de usuario para **Rematix**, una aplicación móvil de subastas de alta gama desarrollada para la facultad.
+Este repositorio contiene la arquitectura técnica y el diseño de experiencia de usuario para **Rematix**, una aplicación móvil de subastas desarrollada para la materia Desarrollo de Aplicaciones 1. 
 
 ---
 
 ## 🎨 Diseño y Prototipado (Figma)
-El diseño visual se centra en una estética **minimalista, profesional y elegante**, optimizada para dispositivos Mac y móviles.
+El diseño visual se centra en una estética **minimalista, profesional y elegante**, optimizada para dispositivos móviles.
 
 * **Diseño de Pantallas:** [Link al Figma de las pantallas](https://www.figma.com/design/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
 * **Prototipo Interactivo:** [Link al Prototipo en Figma](https://www.figma.com/proto/BkLusutksNjV9ZZEEBSBtN/Desarrollo-de-App?node-id=0-1&t=S8pRBRXF7auLkP4c-1)
