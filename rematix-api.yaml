@@ -1768,8 +1768,8 @@ components:
           example: Av. Alvear 1820
           minLength: 5
         pais_residencia:
-          type: string
-          example: Argentina
+          type: integer
+          example: 1
         email:
           type: string
           format: email
