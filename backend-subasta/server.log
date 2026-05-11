@@ -1,0 +1,4 @@
+◇ injected env (7) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+Servidor de Subastas Dinámicas corriendo en el puerto 3000
+[Simulación] Email de recuperación enviado a: usuario@mail.com
