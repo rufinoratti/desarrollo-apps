@@ -113,7 +113,7 @@ useEffect(() => {
         });
         router.push('/(auth)/registro/paso2');
       } else {
-        Alert.alert('Error', 'Ocurrió un error inesperado');
+        Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }
     } catch (error) {
       console.error(error);

@@ -63,12 +63,12 @@ export default function Paso3() {
     try {
       const formData = new FormData();
       formData.append('registro_id', registrationData.registro_id.toString());
-      formData.append('frente', {
+      formData.append('dni_frente', {
         uri: frente.uri,
         name: 'frente.jpg',
         type: 'image/jpeg',
       } as any);
-      formData.append('dorso', {
+      formData.append('dni_dorso', {
         uri: dorso.uri,
         name: 'dorso.jpg',
         type: 'image/jpeg',

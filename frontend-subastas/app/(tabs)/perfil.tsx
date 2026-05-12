@@ -71,8 +71,29 @@ export default function Perfil() {
         await removeToken();
         return;
       }
-      const perfilData = await perfilRes.json();
+      const raw = await perfilRes.json();
       const restData = await restRes.json();
+      const perfilData: PerfilData = {
+        usuario: {
+          id: raw.usuario_id ?? '',
+          nombre_completo: raw.nombre_completo ?? '',
+          email: raw.datos_personales?.email ?? '',
+          nivel: raw.categoria ?? '',
+          foto_url: raw.datos_personales?.foto ?? null,
+        },
+        datos_personales: {
+          documento: raw.datos_personales?.documento ?? '',
+          telefono: '',
+          direccion: raw.datos_personales?.direccion ?? '',
+          pais_residencia: '',
+        },
+        cuenta_cobro: raw.cuenta_cobro
+          ? {
+              cbu_alias: raw.cuenta_cobro.numero_cbu ?? '',
+              banco: raw.cuenta_cobro.entidad_bancaria ?? '',
+            }
+          : null,
+      };
       setPerfil(perfilData);
       setRestricciones(restData);
     } catch {
