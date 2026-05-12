@@ -31,7 +31,7 @@ export default function Paso4Pago() {
 
   useEffect(() => {
     if (metodo === 'CUENTA_BANCARIA' && bancos.length === 0) {
-      fetch(`${API_URL}/bancos`)
+      fetch(`${API_URL}/api/auth/bancos`)
         .then(res => res.json())
         .then(data => setBancos(data))
         .catch(() => Alert.alert('Error', 'No se pudieron cargar los bancos'));
@@ -77,7 +77,7 @@ export default function Paso4Pago() {
         payload.detalles = { numero_tarjeta: tarjeta.replace(/\s/g, ''), cvv, fecha_expiracion: fechaExp, titular };
       }
 
-      const response = await fetch(`${API_URL}/auth/registro/paso4-pago`, {
+      const response = await fetch(`${API_URL}/api/auth/registro/paso4-pago`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

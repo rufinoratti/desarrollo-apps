@@ -4,7 +4,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, FlatList } from 'react
 interface SelectProps {
   label: string;
   value: string;
-  options: { id: number; nombre: string }[];
+  // 1. Actualizamos los tipos para que acepte id, numero, nombre o label sin quejarse
+  options: { id?: number; numero?: number; nombre?: string; label?: string }[];
   onSelect: (id: number, nombre: string) => void;
   disabled?: boolean;
   placeholder?: string;
@@ -32,26 +33,33 @@ export const Select: React.FC<SelectProps> = ({ label, value, options, onSelect,
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecciona un país</Text>
+              <Text style={styles.modalTitle}>Selecciona una opción</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeText}>Cerrar</Text>
               </TouchableOpacity>
             </View>
             <FlatList
-              data={options}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.option} 
-                  onPress={() => {
-                    onSelect(item.id, item.nombre);
-                    setModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.optionText}>{item.nombre}</Text>
-                </TouchableOpacity>
-              )}
-            />
+               data={options}
+               keyExtractor={(item, index) => String(item?.id ?? item?.numero ?? index)}
+               renderItem={({ item }) => (
+                 <TouchableOpacity 
+                   style={styles.option} 
+                   onPress={() => {
+                     // 2. Le pasamos al formulario el ID (o el numero) y el Nombre
+                     onSelect(
+                       item?.id ?? item?.numero ?? 0, 
+                       item?.nombre ?? item?.label ?? 'Opción'
+                     );
+                     // 3. Cerramos el modal automáticamente al elegir
+                     setModalVisible(false);
+                   }}
+                 >
+                   <Text style={styles.optionText}>
+                     {item?.nombre ?? item?.label ?? 'Opción sin nombre'}
+                   </Text>
+                 </TouchableOpacity>
+               )}
+             />
           </View>
         </View>
       </Modal>

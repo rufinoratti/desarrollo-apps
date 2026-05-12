@@ -53,7 +53,7 @@ export default function Paso2() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/registro/paso2`, {
+      const response = await fetch(`${API_URL}/api/auth/registro/paso2`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

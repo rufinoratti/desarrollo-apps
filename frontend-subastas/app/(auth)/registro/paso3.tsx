@@ -74,7 +74,7 @@ export default function Paso3() {
         type: 'image/jpeg',
       } as any);
 
-      const response = await fetch(`${API_URL}/auth/registro/paso3`, {
+      const response = await fetch(`${API_URL}/api/auth/registro/paso3`, {
         method: 'POST',
         body: formData,
       });

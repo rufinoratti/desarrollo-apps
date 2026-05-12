@@ -183,7 +183,7 @@ export default function Perfil() {
         {/* Foto y nombre */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            {perfil.usuario.foto_url ? (
+            {perfil?.usuario?.foto_url ? (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person" size={50} color="#CCC" />
               </View>

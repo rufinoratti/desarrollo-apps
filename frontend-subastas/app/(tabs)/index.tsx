@@ -51,21 +51,29 @@ export default function Home() {
   const [pagina, setPagina] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchCategorias = async () => {
+const fetchCategorias = async () => {
     try {
-      if (!token) return;
-      const res = await fetch(`${API_URL}/categorias`, { headers: { Authorization: `Bearer ${token}` } });
+      // Le agregamos /api acá 👇
+      const res = await fetch(`${API_URL}/api/categorias`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      
       if (res.status === 401) return handleUnauthorized();
+      
       const data = await res.json();
       setCategorias(data);
-    } catch (e) { console.error(e); } finally { setLoadingCategorias(false); }
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setLoadingCategorias(false); 
+    }
   };
 
   const fetchSubastas = async (page = 1, catId = categoriaActiva, shouldRefresh = false) => {
     if (!shouldRefresh) setLoadingSubastas(true);
     try {
       if (!token) return;
-      const url = `${API_URL}/subastas?pagina=${page}&limite=10${catId ? `&categoria_id=${catId}` : ''}`;
+      const url = `${API_URL}/api/subastas?pagina=${page}&limite=10${catId ? `&categoria_id=${catId}` : ''}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) return handleUnauthorized();
       const data = await res.json();

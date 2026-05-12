@@ -24,18 +24,30 @@ export default function Paso1() {
   });
 
   const [errors, setErrors] = useState<any>({});
-
-  useEffect(() => {
-    fetch(`${API_URL}/paises`)
-      .then(res => res.json())
+useEffect(() => {
+    fetch(`${API_URL}/api/auth/paises`)
+      .then(async res => {
+        // 1. Verificamos si la respuesta del backend fue exitosa (Status 200)
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || `Error del servidor: ${res.status}`);
+        }
+        return res.json();
+      })
       .then(data => {
-        setCountries(data);
+        // 2. Imprimimos los datos en consola para ver qué forma tienen
+        console.log("Datos de países recibidos:", data); 
+        
+        // 3. Chequeamos si viene un array directo o si viene envuelto
+        const arrayPaises = Array.isArray(data) ? data : (data.paises || data.data || []);
+        
+        setCountries(arrayPaises);
         setCountriesLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        console.error("Error al traer países:", err.message);
         setCountriesLoading(false);
-        Alert.alert('Error', 'No se pudieron cargar los países. Verifica que el mock server esté corriendo.');
+        // Alert.alert('Error', 'No se pudieron cargar los países.'); // Podés descomentar esto después
       });
   }, []);
 
@@ -71,7 +83,7 @@ export default function Paso1() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/registro/paso1`, {
+      const response = await fetch(`${API_URL}/api/auth/registro/paso1`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
