@@ -1,87 +1,70 @@
-import React from 'react';
-import { View, Text } from 'react-native';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  import React from 'react';
+  import { Tabs } from 'expo-router';
+  import { Ionicons } from '@expo/vector-icons';
+  import { Platform } from 'react-native';
 
-export default function TabLayout() {
-  return (
-    <Tabs 
-      screenOptions={{ 
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          height: 80,
-          paddingHorizontal: 20,
-          backgroundColor: '#FFF',
-          borderTopWidth: 0,
-          elevation: 10,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-        }
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <View style={{ flexDirection: 'row', backgroundColor: '#000', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignItems: 'center' }}>
-                <Ionicons name="home" size={20} color="#FFF" />
-                <Text style={{ color: '#FFF', marginLeft: 8, fontWeight: 'bold', fontSize: 12 }}>Inicio</Text>
-              </View>
-            ) : (
-              <Ionicons name="home-outline" size={24} color="#888" />
-            )
-          ),
+  export default function TabLayout() {
+    return (
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarActiveTintColor: '#000000', // Ícono seleccionado en negro
+          tabBarInactiveTintColor: '#999999', // Ícono inactivo en gris
+          tabBarStyle: {
+            height: Platform.OS === 'ios' ? 88 : 72,
+            paddingHorizontal: 12,
+            paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+            paddingTop: 8,
+            backgroundColor: '#FFFFFF',
+            borderTopWidth: 1,
+            borderTopColor: '#F0F0F0',
+          },
         }}
-      />
-      <Tabs.Screen
-        name="subastas"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <View style={{ flexDirection: 'row', backgroundColor: '#000', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignItems: 'center' }}>
-                <Ionicons name="pricetag" size={20} color="#FFF" />
-                <Text style={{ color: '#FFF', marginLeft: 8, fontWeight: 'bold', fontSize: 12 }}>Subastas</Text>
-              </View>
-            ) : (
-              <Ionicons name="pricetag-outline" size={24} color="#888" />
-            )
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="pujas-actuales"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <View style={{ flexDirection: 'row', backgroundColor: '#000', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignItems: 'center' }}>
-                <Ionicons name="hammer" size={20} color="#FFF" />
-                <Text style={{ color: '#FFF', marginLeft: 8, fontWeight: 'bold', fontSize: 12 }}>Pujas</Text>
-              </View>
-            ) : (
-              <Ionicons name="hammer-outline" size={24} color="#888" />
-            )
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="perfil"
-        options={{
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <View style={{ flexDirection: 'row', backgroundColor: '#000', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignItems: 'center' }}>
-                <Ionicons name="person" size={20} color="#FFF" />
-                <Text style={{ color: '#FFF', marginLeft: 8, fontWeight: 'bold', fontSize: 12 }}>Perfil</Text>
-              </View>
-            ) : (
-              <Ionicons name="person-outline" size={24} color="#888" />
-            )
-          ),
-        }}
-      />
-    </Tabs>
-  );
-}
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="subastas"
+          options={{
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? "pricetag" : "pricetag-outline"} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="pujas-actuales"
+          options={{
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? "compass" : "compass-outline"} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="perfil"
+          options={{
+            tabBarIcon: ({ focused, color }) => (
+              <Ionicons name={focused ? "person" : "person-outline"} size={24} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen name="billetera" options={{ href: null }} />
+        <Tabs.Screen name="historial" options={{ href: null }} />
+      </Tabs>
+    );
+  }
+
+  const activePill = {
+    backgroundColor: '#000000',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center', // Clave para que el ícono quede bien centrado
+  };
