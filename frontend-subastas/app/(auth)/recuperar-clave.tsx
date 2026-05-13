@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TextInput, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Button } from '@/src/components/Button';
+import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/src/config/env';
 
 export default function RecuperarClave() {
-  const [email, setEmail] = useState('');
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(emailParam ?? '');
   const [loading, setLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [resetToken, setResetToken] = useState('');
@@ -51,6 +53,9 @@ export default function RecuperarClave() {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={styles.scroll}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color="#000" />
+            </TouchableOpacity>
             <View style={styles.header}>
               <Text style={styles.logo}>REMATIX</Text>
             </View>
@@ -86,6 +91,9 @@ export default function RecuperarClave() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
           <View style={styles.header}>
             <Text style={styles.logo}>REMATIX</Text>
             <Text style={styles.logoSub}>GALERÍA DE SUBASTAS EXCLUSIVAS</Text>
@@ -134,6 +142,7 @@ export default function RecuperarClave() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
+  backButton: { position: 'absolute', top: 0, left: 0, zIndex: 10, padding: 4 },
   container: { flex: 1 },
   scroll: { padding: 30, paddingTop: 50, flexGrow: 1 },
   header: { marginBottom: 50 },

@@ -1,6 +1,6 @@
 // 1. Ponemos la dirección de tu Mac (Reemplazá las X por tu IP real)
 // Si usás el simulador de iOS en la Mac, podés poner 'http://localhost:3000'
-const BASE_URL = 'http://192.168.0.21:3000';
+const BASE_URL = 'http://192.168.1.66:3000';
 
 // 2. Creamos nuestra función "cartero"
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
