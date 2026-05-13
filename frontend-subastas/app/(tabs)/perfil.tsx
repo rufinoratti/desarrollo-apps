@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -62,6 +63,7 @@ export default function Perfil() {
   const [editDireccion, setEditDireccion] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchPerfil = useCallback(async () => {
     if (!token) return;
@@ -105,6 +107,12 @@ export default function Perfil() {
       setLoading(false);
     }
   }, [token, removeToken]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchPerfil();
+    setRefreshing(false);
+  }, [fetchPerfil]);
 
   useEffect(() => {
     fetchPerfil();
@@ -350,8 +358,15 @@ export default function Perfil() {
   if (!perfil) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#888' }}>No se pudo cargar el perfil</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: '#888', marginBottom: 20, textAlign: 'center' }}>No se pudo cargar el perfil</Text>
+          <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 20, textAlign: 'center' }}>Tirá hacia abajo para reintentar</Text>
+          <TouchableOpacity
+            onPress={() => { setLoading(true); fetchPerfil(); }}
+            style={{ borderWidth: 1, borderColor: '#000', borderRadius: 25, paddingVertical: 12, paddingHorizontal: 30 }}
+          >
+            <Text style={{ fontWeight: 'bold', fontSize: 12, letterSpacing: 1 }}>REINTENTAR</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -370,7 +385,13 @@ export default function Perfil() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Foto y nombre */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
