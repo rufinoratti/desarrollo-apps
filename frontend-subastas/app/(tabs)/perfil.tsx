@@ -532,6 +532,12 @@ export default function Perfil() {
           </TouchableOpacity>
         </View>
 
+        {/* Cambiar Contraseña */}
+        <TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/(auth)/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
+          <Ionicons name="lock-closed-outline" size={20} color="#000" />
+          <Text style={styles.cambiarClaveText}>CAMBIAR CONTRASEÑA</Text>
+        </TouchableOpacity>
+
         {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#D32F2F" />
@@ -764,6 +770,19 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 9,
     fontWeight: '700',
+  },
+  cambiarClaveButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  cambiarClaveText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: 2,
   },
   logoutButton: {
     flexDirection: 'row',

@@ -25,6 +25,7 @@
  * @requires jsonwebtoken
  */
 
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { store, nextId } = require('./data.store');
@@ -52,6 +53,9 @@ const RECOVERY_COOLDOWN_MS = Number(process.env.RECOVERY_COOLDOWN_MS || 60_000);
 
 /** Tiempo de vida de un registro temporal (ms). 30 minutos. */
 const REGISTRO_TEMP_TTL_MS = 30 * 60 * 1000;
+
+/** Tiempo de vida de un token de restablecimiento (ms). 1 hora. */
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 // ============================================================
 // CATÁLOGOS ESTÁTICOS
@@ -835,6 +839,9 @@ const recuperarClave = async (payload) => {
 
     store.recoveryAttempts[email] = now;
 
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetExpires = Date.now() + RESET_TOKEN_TTL_MS;
+
     if (isConfigured) {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
             redirectTo: process.env.RESET_PASSWORD_URL || 'https://tuapp.com/reset-password'
@@ -844,11 +851,88 @@ const recuperarClave = async (payload) => {
             console.error('Error recovery:', error.message);
         }
     } else {
+        if (!store.resetTokens) store.resetTokens = {};
+        store.resetTokens[email] = { token: resetToken, expires: resetExpires };
         console.log(`[Simulación] Email de recuperación enviado a: ${email}`);
+        console.log(`[Simulación] Token: ${resetToken}`);
+        console.log(`[Simulación] Reset URL: ${process.env.RESET_PASSWORD_URL || '/(auth)/restablecer-clave'}?email=${email}&token=${resetToken}`);
     }
 
     return {
-        mensaje: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña'
+        mensaje: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña',
+        ...(!isConfigured && { resetToken, email })
+    };
+};
+
+// ============================================================
+// RESTABLECER CONTRASEÑA (con token)
+// ============================================================
+
+/**
+ * Restablece la contraseña usando un token de recuperación válido.
+ *
+ * En modo local valida el token del store.
+ * En modo Supabase la validación la maneja Supabase Auth internamente,
+ * este endpoint sirve como paso final tras el redirect de Supabase.
+ *
+ * @param {Object} payload
+ * @param {string} payload.email
+ * @param {string} payload.token - Token de recuperación
+ * @param {string} payload.newPassword - Nueva contraseña
+ * @returns {Promise<{mensaje:string}>}
+ * @throws {AppError} 400 si faltan datos o contraseña débil
+ * @throws {AppError} 401 si el token es inválido o expiró
+ * @throws {AppError} 404 si el usuario no existe
+ */
+const restablecerClave = async (payload) => {
+    let { email, token, newPassword } = payload;
+
+    email = normalizarEmail(email);
+
+    if (!email || !token || !newPassword) {
+        throw new AppError('Datos incompletos', 400);
+    }
+
+    validarEmail(email);
+    validarPassword(newPassword);
+
+    const hashedPassword = await hashPassword(newPassword);
+
+    if (isConfigured) {
+        const { error } = await supabase.auth.updateUser({
+            password: newPassword
+        });
+
+        if (error) {
+            throw new AppError('Error al restablecer la contraseña: ' + error.message, 500);
+        }
+    } else {
+        if (!store.resetTokens || !store.resetTokens[email]) {
+            const err = new AppError('Token inválido o expirado', 401);
+            err.codigo = 'TOKEN_INVALIDO';
+            throw err;
+        }
+
+        const stored = store.resetTokens[email];
+        if (stored.token !== token || Date.now() > stored.expires) {
+            delete store.resetTokens[email];
+            const err = new AppError('Token inválido o expirado', 401);
+            err.codigo = 'TOKEN_INVALIDO';
+            throw err;
+        }
+
+        const usuario = store.users.find((u) => u.email === email);
+        if (!usuario) {
+            throw new AppError('Usuario no encontrado', 404);
+        }
+
+        usuario.passwordHash = hashedPassword;
+
+        delete store.resetTokens[email];
+    }
+
+    return {
+        mensaje: 'Contraseña restablecida correctamente'
     };
 };
 
@@ -945,6 +1029,7 @@ module.exports = {
     login,
     logout,
     recuperarClave,
+    restablecerClave,
     // Catálogos
     obtenerPaises,
     obtenerBancos,

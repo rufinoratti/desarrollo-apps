@@ -42,6 +42,7 @@ const catalogoRoutes = require('./routes/catalogo.routes');
 const billeteraRoutes = require('./routes/billetera.routes');
 const pujasRoutes = require('./routes/pujas.routes');
 const perfilRoutes = require('./routes/perfil.routes');
+const authController = require('./controllers/auth.controller');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
@@ -92,6 +93,10 @@ app.use('/api', catalogoRoutes);
 app.use('/api', billeteraRoutes);
 app.use('/api', pujasRoutes);
 app.use('/api', perfilRoutes);
+
+// Sirve la página HTML de restablecer contraseña en la raíz
+// (Supabase redirige aquí desde el email de recuperación)
+app.get('/', authController.resetPasswordPage);
 
 /**
  * ============================================================

@@ -1,11 +1,10 @@
-// 1. Ponemos la dirección de tu Mac (Reemplazá las X por tu IP real)
-// Si usás el simulador de iOS en la Mac, podés poner 'http://localhost:3000'
-const BASE_URL = 'http://192.168.0.21:3000';
+// 1. Importamos la dirección dinámica desde tu archivo de configuración
+import { API_URL } from '../config/env';
 
-// 2. Creamos nuestra función "cartero"
+// 2. Mantenemos nuestra función "cartero" intacta
 export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
-  // Preparamos la dirección final (ej: http://192.168.0.15:3000/categorias)
-  const url = `${BASE_URL}${endpoint}`;
+  // Preparamos la dirección final usando la variable dinámica (ej: http://192.168.1.95:3000/api/categorias)
+  const url = `${API_URL}${endpoint}`;
 
   // Configuramos los encabezados (headers) para avisar que mandamos/recibimos JSON
   const customHeaders = new Headers(options.headers || {});
@@ -21,7 +20,7 @@ export const apiFetch = async (endpoint: string, options: RequestInit = {}) => {
     headers: customHeaders,
   };
 
-try {
+  try {
     const response = await fetch(url, config);
     // Agregamos este log para chusmear qué responde el backend
     console.log(`Respuesta de ${endpoint}:`, response.status); 
