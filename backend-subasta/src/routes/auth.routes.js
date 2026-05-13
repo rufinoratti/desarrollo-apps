@@ -174,6 +174,29 @@ router.post('/logout', authMiddleware, authController.logout);
 router.post('/recuperar-clave', authController.recuperarClave);
 
 /**
+ * RESTABLECER CONTRASEÑA (con token)
+ * POST /api/auth/restablecer-clave
+ * 
+ * El cliente envía: email, token, newPassword
+ * El service valida el token y actualiza la contraseña
+ * (requiere el token recibido por email)
+ */
+router.post('/restablecer-clave', authController.restablecerClave);
+
+/**
+ * PÁGINA DE RESTABLECER CONTRASEÑA (para redirect de Supabase)
+ * GET /api/auth/reset-password
+ * 
+ * Sirve una página HTML que captura el hash #access_token del
+ * redirect de Supabase Auth y permite al usuario ingresar una
+ * nueva contraseña.
+ * 
+ * IMPORTANTE: Esta URL debe estar agregada en Supabase Dashboard >
+ * Authentication > URL Configuration > Redirect URLs
+ */
+router.get('/reset-password', authController.resetPasswordPage);
+
+/**
  * ============================================================
  * ENDPOINTS DE CATÁLOGOS (sin autenticación)
  * ============================================================

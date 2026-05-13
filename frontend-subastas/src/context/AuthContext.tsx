@@ -19,13 +19,10 @@ const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 // Public routes must be matched carefully: '/' is only the splash route.
 const publicRoutes = [
-  '/',
-  '/(auth)/onboarding',
-  '/(auth)/login',
-  '/(auth)/registro/paso1',
-  '/(auth)/registro/paso2',
-  '/(auth)/registro/paso3',
-  '/(auth)/registro/paso4-pago',
+  '/', '/(auth)/onboarding', '/(auth)/login',
+  '/(auth)/recuperar-clave', '/(auth)/restablecer-clave',
+  '/(auth)/registro/paso1', '/(auth)/registro/paso2',
+  '/(auth)/registro/paso3', '/(auth)/registro/paso4-pago',
 ];
 
 function useAuthRedirect(token: string | null, isLoading: boolean) {

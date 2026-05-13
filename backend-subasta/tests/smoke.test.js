@@ -16,6 +16,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const app = require('../src/app');
+const { store } = require('../src/services/data.store');
 
 // ============================================================
 // HEALTH CHECK
@@ -256,4 +257,97 @@ test('POST /api/auth/recuperar-clave — email inválido devuelve 400', async ()
         .send({ email: 'no-es-un-email' });
 
     assert.equal(res.statusCode, 400);
+});
+
+// ============================================================
+// RESTABLECER CONTRASEÑA (con token)
+// ============================================================
+
+let resetToken;
+let resetEmail;
+
+test('POST /api/auth/recuperar-clave — captura token para tests siguientes', async () => {
+    store.recoveryAttempts = {};
+    const res = await request(app)
+        .post('/api/auth/recuperar-clave')
+        .send({ email: 'ada@rematix.com' });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.resetToken);
+    resetToken = res.body.resetToken;
+    resetEmail = res.body.email;
+});
+
+test('POST /api/auth/restablecer-clave — token válido actualiza contraseña', async () => {
+    const res = await request(app)
+        .post('/api/auth/restablecer-clave')
+        .send({
+            email: resetEmail,
+            token: resetToken,
+            newPassword: 'TestReset1'
+        });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.mensaje);
+});
+
+test('POST /api/auth/restablecer-clave — nueva contraseña funciona en login', async () => {
+    const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'ada@rematix.com', password: 'TestReset1' });
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.token);
+});
+
+test('POST /api/auth/restablecer-clave — token inválido devuelve 401', async () => {
+    const res = await request(app)
+        .post('/api/auth/restablecer-clave')
+        .send({
+            email: 'ada@rematix.com',
+            token: 'token-falso',
+            newPassword: 'TestNueva1'
+        });
+
+    assert.equal(res.statusCode, 401);
+});
+
+test('POST /api/auth/restablecer-clave — datos incompletos devuelve 400', async () => {
+    const res = await request(app)
+        .post('/api/auth/restablecer-clave')
+        .send({ email: 'ada@rematix.com' });
+
+    assert.equal(res.statusCode, 400);
+});
+
+test('GET /api/auth/reset-password — devuelve página HTML', async () => {
+    const res = await request(app).get('/api/auth/reset-password');
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.headers['content-type'].includes('text/html'));
+    assert.ok(res.text.includes('REMATIX'));
+    assert.ok(res.text.includes('Nueva Contrase'));
+    assert.ok(res.text.includes('auth/v1/user'));
+});
+
+// Restaurar contraseña original de Ada para no romper otros tests
+test('POST /api/auth/recuperar-clave — restaura contraseña original de Ada', async () => {
+    store.recoveryAttempts = {};
+    const rec = await request(app)
+        .post('/api/auth/recuperar-clave')
+        .send({ email: 'ada@rematix.com' });
+
+    await request(app)
+        .post('/api/auth/restablecer-clave')
+        .send({
+            email: rec.body.email,
+            token: rec.body.resetToken,
+            newPassword: 'Test1234!'
+        });
+
+    const login = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'ada@rematix.com', password: 'Test1234!' });
+
+    assert.equal(login.statusCode, 200);
 });

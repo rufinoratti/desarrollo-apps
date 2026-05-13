@@ -113,7 +113,7 @@ export default function Login() {
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
-            onForgot={() => Alert.alert('Aviso', 'Ir a recuperación de clave...')}
+            onForgot={() => router.push('/(auth)/recuperar-clave')}
           />
 
           <View style={styles.spacer} />

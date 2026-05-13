@@ -41,7 +41,7 @@ export default function SplashScreen() {
         <View style={styles.line1} />
         <View style={styles.line2} />
         <View style={styles.line3} />
-        <Text style={styles.footerText}>BUENOS AIRES • EST. 2020</Text>
+        <Text style={styles.footerText}>UADE • EST. 2026</Text>
       </View>
     </View>
   );
