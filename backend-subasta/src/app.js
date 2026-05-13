@@ -34,6 +34,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const authRoutes = require('./routes/auth.routes');
 const homeRoutes = require('./routes/home.routes');
@@ -49,6 +50,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Servir archivos estáticos (fotos de perfil, DNI, etc.)
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 /**
  * ENDPOINT DE SALUD

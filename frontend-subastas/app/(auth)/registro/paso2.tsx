@@ -53,7 +53,7 @@ export default function Paso2() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/registro/paso2`, {
+      const response = await fetch(`${API_URL}/api/auth/registro/paso2`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,10 +67,9 @@ export default function Paso2() {
       if (response.status === 400) {
         Alert.alert('Error', data.error);
       } else if (response.status === 200) {
-        // Guardar progreso si fuera necesario, o ir directo al paso 3
         router.push('/(auth)/registro/paso3');
       } else {
-        Alert.alert('Error', 'Ocurrió un error inesperado');
+        Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }
     } catch (err) {
       console.error(err);

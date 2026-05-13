@@ -122,7 +122,8 @@ const errorHandler = (err, req, res, next) => {
  */
 router.post('/registro/paso3', upload.fields([
     { name: 'dni_frente', maxCount: 1 },
-    { name: 'dni_dorso', maxCount: 1 }
+    { name: 'dni_dorso', maxCount: 1 },
+    { name: 'foto_perfil', maxCount: 1 }
 ]), errorHandler, authController.paso3Registro);
 
 /**

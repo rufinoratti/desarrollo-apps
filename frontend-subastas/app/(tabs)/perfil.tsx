@@ -8,11 +8,14 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Image,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/src/context/AuthContext';
 import { Button } from '@/src/components/Button';
 import { API_URL } from '@/src/config/env';
@@ -59,20 +62,43 @@ export default function Perfil() {
   const [editTelefono, setEditTelefono] = useState('');
   const [editDireccion, setEditDireccion] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchPerfil = useCallback(async () => {
     if (!token) return;
     try {
       const [perfilRes, restRes] = await Promise.all([
-        fetch(`${API_URL}/perfil`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_URL}/perfil/restricciones`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/perfil`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_URL}/api/perfil/restricciones`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       if (perfilRes.status === 401) {
         await removeToken();
         return;
       }
-      const perfilData = await perfilRes.json();
+      const raw = await perfilRes.json();
       const restData = await restRes.json();
+      const perfilData: PerfilData = {
+        usuario: {
+          id: raw.usuario_id ?? '',
+          nombre_completo: raw.nombre_completo ?? '',
+          email: raw.datos_personales?.email ?? '',
+          nivel: raw.categoria ?? '',
+          foto_url: raw.foto_url ?? null,
+        },
+        datos_personales: {
+          documento: raw.datos_personales?.documento ?? '',
+          telefono: raw.datos_personales?.telefono ?? '',
+          direccion: raw.datos_personales?.direccion ?? '',
+          pais_residencia: raw.datos_personales?.pais_residencia ?? '',
+        },
+        cuenta_cobro: raw.cuenta_cobro
+          ? {
+              cbu_alias: raw.cuenta_cobro.numero_cbu ?? '',
+              banco: raw.cuenta_cobro.entidad_bancaria ?? '',
+            }
+          : null,
+      };
       setPerfil(perfilData);
       setRestricciones(restData);
     } catch {
@@ -81,6 +107,12 @@ export default function Perfil() {
       setLoading(false);
     }
   }, [token, removeToken]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchPerfil();
+    setRefreshing(false);
+  }, [fetchPerfil]);
 
   useEffect(() => {
     fetchPerfil();
@@ -98,7 +130,7 @@ export default function Perfil() {
     if (!token || !perfil) return;
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/perfil`, {
+      const res = await fetch(`${API_URL}/api/perfil`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -114,10 +146,32 @@ export default function Perfil() {
         await removeToken();
         return;
       }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al actualizar');
+      }
       const data = await res.json();
-      setPerfil(prev => prev ? { ...prev, usuario: data.usuario, datos_personales: data.datos_personales } : null);
-      if (data.usuario.nombre_completo !== nombre) {
-        await saveToken(token, data.usuario.nombre_completo);
+      const updatedPerfil: PerfilData = {
+        usuario: {
+          id: data.usuario_id ?? '',
+          nombre_completo: data.nombre_completo ?? '',
+          email: data.datos_personales?.email ?? '',
+          nivel: data.categoria ?? '',
+          foto_url: data.foto_url ?? null,
+        },
+        datos_personales: {
+          documento: data.datos_personales?.documento ?? '',
+          telefono: data.datos_personales?.telefono ?? '',
+          direccion: data.datos_personales?.direccion ?? '',
+          pais_residencia: data.datos_personales?.pais_residencia ?? '',
+        },
+        cuenta_cobro: data.cuenta_cobro
+          ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
+          : perfil.cuenta_cobro,
+      };
+      setPerfil(updatedPerfil);
+      if (editNombre !== nombre) {
+        await saveToken(token, editNombre);
       }
       setEditing(false);
       Alert.alert('Éxito', 'Datos actualizados correctamente');
@@ -126,6 +180,151 @@ export default function Perfil() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handlePickPhotoFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+    await uploadPhoto(result.assets[0].uri);
+  };
+
+  const handlePickPhotoFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a la galería.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+    await uploadPhoto(result.assets[0].uri);
+  };
+
+  const uploadPhoto = async (uri: string) => {
+    setUploadingFoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('foto', {
+        uri,
+        name: 'perfil.jpg',
+        type: 'image/jpeg',
+      } as any);
+
+      const res = await fetch(`${API_URL}/api/perfil/foto`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.status === 401) {
+        await removeToken();
+        return;
+      }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al subir la foto');
+      }
+
+      const data = await res.json();
+      const updatedPerfil: PerfilData = {
+        usuario: {
+          id: data.usuario_id ?? '',
+          nombre_completo: data.nombre_completo ?? '',
+          email: data.datos_personales?.email ?? '',
+          nivel: data.categoria ?? '',
+          foto_url: data.foto_url ?? null,
+        },
+        datos_personales: {
+          documento: data.datos_personales?.documento ?? '',
+          telefono: data.datos_personales?.telefono ?? '',
+          direccion: data.datos_personales?.direccion ?? '',
+          pais_residencia: data.datos_personales?.pais_residencia ?? '',
+        },
+        cuenta_cobro: data.cuenta_cobro
+          ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
+          : perfil?.cuenta_cobro ?? null,
+      };
+      setPerfil(updatedPerfil);
+    } catch {
+      Alert.alert('Error', 'No se pudo subir la foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!token) return;
+    setUploadingFoto(true);
+    try {
+      const res = await fetch(`${API_URL}/api/perfil/foto`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.status === 401) {
+        await removeToken();
+        return;
+      }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al eliminar la foto');
+      }
+
+      const data = await res.json();
+      const updatedPerfil: PerfilData = {
+        usuario: {
+          id: data.usuario_id ?? '',
+          nombre_completo: data.nombre_completo ?? '',
+          email: data.datos_personales?.email ?? '',
+          nivel: data.categoria ?? '',
+          foto_url: null,
+        },
+        datos_personales: {
+          documento: data.datos_personales?.documento ?? '',
+          telefono: data.datos_personales?.telefono ?? '',
+          direccion: data.datos_personales?.direccion ?? '',
+          pais_residencia: data.datos_personales?.pais_residencia ?? '',
+        },
+        cuenta_cobro: data.cuenta_cobro
+          ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
+          : perfil?.cuenta_cobro ?? null,
+      };
+      setPerfil(updatedPerfil);
+    } catch {
+      Alert.alert('Error', 'No se pudo eliminar la foto');
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
+  const handlePickPhoto = () => {
+    const options = [
+      { text: 'CÁMARA', onPress: handlePickPhotoFromCamera },
+      { text: 'GALERÍA', onPress: handlePickPhotoFromGallery },
+    ];
+    if (perfil?.usuario?.foto_url) {
+      options.push({ text: 'ELIMINAR FOTO', onPress: handleDeletePhoto, style: 'destructive' as const });
+    }
+    options.push({ text: 'CANCELAR', style: 'cancel' as const });
+    Alert.alert('Foto de perfil', 'Elige una opción', options);
   };
 
   const handleCopyCBU = async () => {
@@ -159,8 +358,15 @@ export default function Perfil() {
   if (!perfil) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: '#888' }}>No se pudo cargar el perfil</Text>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: '#888', marginBottom: 20, textAlign: 'center' }}>No se pudo cargar el perfil</Text>
+          <Text style={{ color: '#aaa', fontSize: 12, marginBottom: 20, textAlign: 'center' }}>Tirá hacia abajo para reintentar</Text>
+          <TouchableOpacity
+            onPress={() => { setLoading(true); fetchPerfil(); }}
+            style={{ borderWidth: 1, borderColor: '#000', borderRadius: 25, paddingVertical: 12, paddingHorizontal: 30 }}
+          >
+            <Text style={{ fontWeight: 'bold', fontSize: 12, letterSpacing: 1 }}>REINTENTAR</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -179,19 +385,30 @@ export default function Perfil() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Foto y nombre */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            {perfil.usuario.foto_url ? (
-              <View style={styles.avatarPlaceholder}>
-                <Ionicons name="person" size={50} color="#CCC" />
-              </View>
+            {perfil?.usuario?.foto_url ? (
+              <Image source={{ uri: `${API_URL}/uploads/${perfil.usuario.foto_url}` }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person" size={50} color="#CCC" />
               </View>
             )}
+            <TouchableOpacity style={styles.cameraButton} onPress={handlePickPhoto} disabled={uploadingFoto}>
+              {uploadingFoto ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Ionicons name="camera" size={16} color="#FFF" />
+              )}
+            </TouchableOpacity>
           </View>
           {editing ? (
             <TextInput
@@ -369,12 +586,30 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: 'hidden',
   },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+  },
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#E0E0E0',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: -4,
+    backgroundColor: '#000',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
   },
   nombre: {
     fontSize: 24,

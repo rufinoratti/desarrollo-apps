@@ -259,7 +259,7 @@ const purgarRegistrosExpirados = () => {
  * @throws {AppError} 500 si falla la inserción en Supabase
  */
 const paso1Registro = async (payload) => {
-    let { nombre_completo, documento, direccion, pais_residencia, email } = payload;
+    let { nombre_completo, documento, direccion, pais_residencia, pais_nombre, email } = payload;
 
     email = normalizarEmail(email);
 
@@ -269,11 +269,20 @@ const paso1Registro = async (payload) => {
 
     validarEmail(email);
 
-    // REC-05 fix: validar que el país enviado exista en el catálogo.
-    // El contrato de la API usa `id` (catálogo local).
-    const paisValido = PAISES.find((p) => p.id === Number(pais_residencia));
+    let paisValido;
+    if (isConfigured) {
+        const { data: paisDb } = await supabase
+            .from('paises')
+            .select('numero')
+            .eq('numero', Number(pais_residencia))
+            .maybeSingle();
+        paisValido = paisDb;
+    } else {
+        paisValido = PAISES.find((p) => p.id === Number(pais_residencia));
+    }
+
     if (!paisValido) {
-        throw new AppError('País de residencia inválido', 400);
+        throw new AppError(`País de residencia inválido. Número recibido: ${pais_residencia}`, 400);
     }
 
     if (!store.registrosTemporales) store.registrosTemporales = [];
@@ -284,7 +293,7 @@ const paso1Registro = async (payload) => {
 
     if (isConfigured) {
         // ----------------------------------------------------------------
-        // Modo Supabase: verificar duplicado + insertar en tabla personas
+        // Modo Supabase: verificar duplicado + crear temporal (sin insertar en personas aún)
         // ----------------------------------------------------------------
 
         // BUG-03 fix: verificar duplicado tanto en temporales como en personas
@@ -306,72 +315,36 @@ const paso1Registro = async (payload) => {
             error.codigo = 'EMAIL_DUPLICADO';
             throw error;
         }
-
-        // BUG-04 fix: incluir email (numeropais va en tabla clientes, no en personas)
-        const { data: persona, error: insertError } = await supabase
-            .from('personas')
-            .insert({
-                documento,
-                nombre: nombre_completo,
-                direccion,
-                email,
-                estado: 'activo'
-            })
-            .select()
-            .single();
-
-        if (insertError) {
-            throw new AppError('Error al crear registro: ' + insertError.message, 500);
-        }
-
-        const registroTemporal = {
-            registro_id: `reg${persona.identificador}`,
-            persona_id: persona.identificador,
-            nombre_completo,
-            documento,
-            direccion,
-            pais_residencia: Number(pais_residencia),
-            email,
-            estado: 'paso1_completo',
-            created_at: new Date().toISOString()
-        };
-
-        store.registrosTemporales.push(registroTemporal);
-
-        return {
-            registro_id: registroTemporal.registro_id,
-            mensaje: 'Registro creado. Continúe con el paso 2.'
-        };
-    } else {
-        // ----------------------------------------------------------------
-        // Modo Local: verificar duplicado en memoria + crear temporal
-        // ----------------------------------------------------------------
-        const emailEnRegistro = store.registrosTemporales.find((r) => r.email === email);
-        const emailEnUsuario = store.users.find((u) => u.email === email);
-        if (emailEnRegistro || emailEnUsuario) {
-            const error = new AppError('El email ya está registrado', 400);
-            error.codigo = 'EMAIL_DUPLICADO';
-            throw error;
-        }
-
-        const registroTemporal = {
-            registro_id: nextId('reg', 'registroTemp'),
-            nombre_completo,
-            documento,
-            direccion,
-            pais_residencia: Number(pais_residencia),
-            email,
-            estado: 'paso1_completo',
-            created_at: new Date().toISOString()
-        };
-
-        store.registrosTemporales.push(registroTemporal);
-
-        return {
-            registro_id: registroTemporal.registro_id,
-            mensaje: 'Registro creado. Continúe con el paso 2.'
-        };
     }
+
+    // ----------------------------------------------------------------
+    // Crear registro temporal (común para ambos modos)
+    // ----------------------------------------------------------------
+    const emailEnRegistro = store.registrosTemporales.find((r) => r.email === email);
+    const emailEnUsuario = store.users.find((u) => u.email === email);
+    if (emailEnRegistro || emailEnUsuario) {
+        const error = new AppError('El email ya está registrado', 400);
+        error.codigo = 'EMAIL_DUPLICADO';
+        throw error;
+    }
+
+    const registroTemporal = {
+        registro_id: nextId('reg', 'registroTemp'),
+        nombre_completo,
+        documento,
+        direccion,
+        pais_residencia: Number(pais_residencia),
+        email,
+        estado: 'paso1_completo',
+        created_at: new Date().toISOString()
+    };
+
+    store.registrosTemporales.push(registroTemporal);
+
+    return {
+        registro_id: registroTemporal.registro_id,
+        mensaje: 'Registro creado. Continúe con el paso 2.'
+    };
 };
 
 // ============================================================
@@ -412,7 +385,6 @@ const paso2Registro = async (payload) => {
             password,
             options: {
                 data: {
-                    persona_id: registro.persona_id,
                     nombre_completo: registro.nombre_completo
                 }
             }
@@ -465,6 +437,7 @@ const paso3Registro = async (payload, archivos) => {
 
     const dni_frente = archivos?.['dni_frente']?.[0];
     const dni_dorso = archivos?.['dni_dorso']?.[0];
+    const foto_perfil = archivos?.['foto_perfil']?.[0];
 
     if (!dni_frente || !dni_dorso) {
         throw new AppError('Se requieren las imágenes del DNI (frente y dorso)', 400);
@@ -475,22 +448,12 @@ const paso3Registro = async (payload, archivos) => {
         throw new AppError('Formato de archivo inválido. Solo se aceptan imágenes JPG o PNG', 400);
     }
 
-    if (isConfigured && registro.persona_id) {
-        // Persistir referencia de las imágenes en Supabase
-        await supabase
-            .from('personas')
-            .update({
-                foto: JSON.stringify({
-                    dni_frente: dni_frente.filename,
-                    dni_dorso: dni_dorso.filename
-                })
-            })
-            .eq('identificador', registro.persona_id);
-    }
-
     // Actualizar registro temporal
     registro.dni_frente = dni_frente.filename;
     registro.dni_dorso = dni_dorso.filename;
+    if (foto_perfil) {
+        registro.foto_perfil = foto_perfil.filename;
+    }
     registro.estado = 'paso3_completo';
     registro.estado_validacion = 'EN_REVISION';
 
@@ -532,14 +495,41 @@ const paso4Registro = async (payload) => {
     validarEstadoRegistro(registro, 'paso3_completo');
     const tipoPagoNormalizado = validarDetallesPago(tipo_pago, detalles);
 
-    if (isConfigured && registro.persona_id) {
+    if (isConfigured) {
         // ----------------------------------------------------------------
-        // Modo Supabase: insertar cliente y medio de pago
+        // Modo Supabase: insertar persona + cliente + medio de pago
         // ----------------------------------------------------------------
+
+        // Primero crear la persona en la tabla personas
+        const fotoData = {};
+        if (registro.dni_frente) fotoData.dni_frente = registro.dni_frente;
+        if (registro.dni_dorso) fotoData.dni_dorso = registro.dni_dorso;
+
+        const { data: persona, error: personaError } = await supabase
+            .from('personas')
+            .insert({
+                documento: registro.documento,
+                nombre: registro.nombre_completo,
+                direccion: registro.direccion,
+                email: registro.email,
+                estado: 'activo',
+                foto: Object.keys(fotoData).length > 0 ? JSON.stringify(fotoData) : null,
+                foto_perfil: registro.foto_perfil || null
+            })
+            .select()
+            .single();
+
+        if (personaError) {
+            throw new AppError('Error al crear persona: ' + personaError.message, 500);
+        }
+
+        const personaId = persona.identificador;
+
+        // Luego crear el cliente vinculado a la persona
         const { data: cliente, error: clienteError } = await supabase
             .from('clientes')
             .insert({
-                identificador: registro.persona_id,
+                identificador: personaId,
                 numeropais: registro.pais_residencia,
                 admitido: 'si',
                 categoria: 'comun',
@@ -559,7 +549,7 @@ const paso4Registro = async (payload) => {
             numero_tarjeta: detalles.numero_tarjeta,
             cbu_alias: detalles.cbu_alias,
             banco: detalles.banco,
-            cliente_id: registro.persona_id
+            cliente_id: personaId
         };
 
         if (!store.mediosPago) store.mediosPago = [];
@@ -567,7 +557,7 @@ const paso4Registro = async (payload) => {
 
         // REC-03 fix: incluir categoria en el JWT
         const token = crearTokenJWT({
-            usuario_id: registro.persona_id,
+            usuario_id: personaId,
             email: registro.email,
             categoria: 'comun'
         });
@@ -579,8 +569,9 @@ const paso4Registro = async (payload) => {
 
         return {
             mensaje: 'Registro completado exitosamente',
-            usuario_id: String(registro.persona_id),
-            token
+            usuario_id: String(personaId),
+            token,
+            categoria: 'comun'
         };
     } else {
         // ----------------------------------------------------------------
@@ -610,6 +601,7 @@ const paso4Registro = async (payload) => {
             estado_registro: 'completo',
             // REC-06 fix: respetar el estado proveniente del paso 3, nunca forzar APROBADO
             estado_validacion: registro.estado_validacion || 'EN_REVISION',
+            foto_perfil: registro.foto_perfil || null,
             bloqueado: false,
             medios_pago: [medioPago],
             created_at: new Date().toISOString()
@@ -632,7 +624,8 @@ const paso4Registro = async (payload) => {
         return {
             mensaje: 'Registro completado exitosamente',
             usuario_id: usuarioId,
-            token
+            token,
+            categoria: nuevoUsuario.categoria
         };
     }
 };
@@ -908,7 +901,7 @@ const obtenerUsuarios = async () => {
     if (isConfigured) {
         const { data, error } = await supabase
             .from('personas')
-            .select('identificador, documento, nombre, direccion, estado, email')
+            .select('identificador, documento, nombre, direccion, estado, email, telefono, foto_perfil')
             .order('identificador', { ascending: true });
 
         if (error) {
@@ -921,7 +914,9 @@ const obtenerUsuarios = async () => {
             documento: persona.documento,
             direccion: persona.direccion,
             estado: persona.estado,
-            email: persona.email || null
+            email: persona.email || null,
+            telefono: persona.telefono || null,
+            foto_perfil: persona.foto_perfil || null
         }));
     }
 

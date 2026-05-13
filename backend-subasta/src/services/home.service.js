@@ -67,6 +67,8 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
                 ubicacion, 
                 categoria, 
                 tematica,
+                nombre,
+                imagen,
                 categorias_tematicas (nombre)
             `, { count: 'exact' });
 
@@ -143,21 +145,18 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
  */
 const formatearSubastaResumen = (row) => ({
     id: row.identificador,
-    // Inventamos un título prolijo ya que la tabla del profe no tiene 'titulo'
-    titulo: `Gran Subasta #${row.identificador}`, 
+    titulo: row.nombre || `Subasta #${row.identificador}`,
     categoria_id: row.tematica,
     categoria_nombre: row.categorias_tematicas?.nombre || null,
     icono_url: null,
-    // Convertimos estado de DB a estado de Swagger
-    estado: row.estado === 'abierta' ? 'EN_VIVO' : 'FINALIZADA', 
-    imagen_portada: null,
-    moneda: 'ARS', // Asumimos Pesos
+    estado: row.estado === 'abierta' ? 'EN_VIVO' : 'FINALIZADA',
+    imagen_portada: row.imagen || null,
+    moneda: 'ARS',
     ubicacion: row.ubicacion || 'Ubicación no definida',
     rematador: row.subastador,
-    // Unimos fecha y hora para el frontend
-    fecha_inicio: `${row.fecha}T${row.hora}`, 
+    fecha_inicio: `${row.fecha}T${row.hora}`,
     fecha_fin: null,
-    nivel_acceso: row.categoria, // 'comun', 'oro', etc.
+    nivel_acceso: row.categoria,
     precio_base_minimo: null,
     total_items: 0
 });
