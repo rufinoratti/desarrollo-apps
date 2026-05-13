@@ -28,10 +28,10 @@ export default function Paso3() {
   const { registrationData } = useRegistration();
   const [frente, setFrente] = useState<any>(null);
   const [dorso, setDorso] = useState<any>(null);
+  const [fotoPerfil, setFotoPerfil] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const pickImage = async (setter: any) => {
-    // Pedir permisos
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara para capturar tu DNI.');
@@ -40,12 +40,52 @@ export default function Paso3() {
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
-      quality: 0.5, // Reducir calidad para evitar error 413
+      quality: 0.5,
     });
 
     if (!result.canceled) {
       setter(result.assets[0]);
     }
+  };
+
+  const pickProfilePhoto = () => {
+    const options: any[] = [
+      {
+        text: 'CÁMARA',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.5,
+          });
+          if (!result.canceled) setFotoPerfil(result.assets[0]);
+        },
+      },
+      {
+        text: 'GALERÍA',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permiso denegado', 'Necesitamos acceso a la galería.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.5,
+          });
+          if (!result.canceled) setFotoPerfil(result.assets[0]);
+        },
+      },
+    ];
+    if (fotoPerfil) {
+      options.push({ text: 'ELIMINAR FOTO', onPress: () => setFotoPerfil(null), style: 'destructive' });
+    }
+    options.push({ text: 'CANCELAR', style: 'cancel' });
+    Alert.alert('Foto de perfil', 'Elige una opción', options);
   };
 
   const handleSubmit = async () => {
@@ -73,6 +113,13 @@ export default function Paso3() {
         name: 'dorso.jpg',
         type: 'image/jpeg',
       } as any);
+      if (fotoPerfil) {
+        formData.append('foto_perfil', {
+          uri: fotoPerfil.uri,
+          name: 'perfil.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
 
       const response = await fetch(`${API_URL}/api/auth/registro/paso3`, {
         method: 'POST',
@@ -124,6 +171,25 @@ export default function Paso3() {
         <ImageCard title="FRENTE DEL DNI" image={frente} onPick={() => pickImage(setFrente)} />
         <ImageCard title="DORSO DEL DNI" image={dorso} onPick={() => pickImage(setDorso)} />
 
+        <View style={styles.divider} />
+        <Text style={styles.sectionTitle}>FOTO DE PERFIL (OPCIONAL)</Text>
+        <Text style={styles.subtitle}>
+          Elige una foto para tu perfil. Puedes saltar este paso y agregarla después.
+        </Text>
+        <TouchableOpacity style={styles.profilePhotoButton} onPress={pickProfilePhoto}>
+          {fotoPerfil ? (
+            <View style={styles.profilePhotoPreview}>
+              <Ionicons name="checkmark-circle" size={40} color="#000" />
+              <Text style={styles.cardSubtitle}>FOTO CARGADA</Text>
+            </View>
+          ) : (
+            <View style={styles.profilePhotoPlaceholder}>
+              <Ionicons name="person-add-outline" size={48} color="#999" />
+              <Text style={styles.profilePhotoText}>AGREGAR FOTO</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         <View style={styles.spacer} />
 
         {loading && <ActivityIndicator style={{ marginBottom: 10 }} color="#000" />}
@@ -155,5 +221,11 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 10, fontWeight: 'bold', color: '#888', letterSpacing: 1, marginBottom: 20 },
   cardButton: { alignItems: 'center', justifyContent: 'center', paddingVertical: 30 },
   cardSubtitle: { fontSize: 12, fontWeight: 'bold', color: '#000', marginTop: 15, letterSpacing: 1 },
+  divider: { height: 1, backgroundColor: '#EEE', marginVertical: 10 },
+  sectionTitle: { fontSize: 10, fontWeight: 'bold', color: '#888', letterSpacing: 1, marginBottom: 10, marginTop: 10 },
+  profilePhotoButton: { backgroundColor: '#F9F9F9', borderRadius: 12, padding: 20, marginBottom: 20, alignItems: 'center' },
+  profilePhotoPreview: { alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
+  profilePhotoPlaceholder: { alignItems: 'center', justifyContent: 'center', paddingVertical: 30 },
+  profilePhotoText: { fontSize: 12, fontWeight: 'bold', color: '#999', marginTop: 10, letterSpacing: 1 },
   spacer: { flex: 1, minHeight: 20 },
 });

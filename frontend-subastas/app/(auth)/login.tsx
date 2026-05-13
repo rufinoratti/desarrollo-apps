@@ -60,7 +60,7 @@ export default function Login() {
       const data = await response.json();
 
       if (response.status === 200) {
-        saveToken(data.token, data.nombre || 'Usuario', data.nivel);
+        saveToken(data.token, data.nombre || 'Usuario', data.categoria);
         router.replace('/(tabs)');
       } else if (response.status === 401) {
         Alert.alert('Error', 'Email o contraseña incorrectos');

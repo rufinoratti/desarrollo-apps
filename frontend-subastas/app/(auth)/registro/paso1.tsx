@@ -35,8 +35,6 @@ useEffect(() => {
         return res.json();
       })
       .then(data => {
-        // 2. Imprimimos los datos en consola para ver qué forma tienen
-        console.log("Datos de países recibidos:", data); 
         
         // 3. Chequeamos si viene un array directo o si viene envuelto
         const arrayPaises = Array.isArray(data) ? data : (data.paises || data.data || []);

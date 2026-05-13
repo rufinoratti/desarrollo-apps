@@ -437,6 +437,7 @@ const paso3Registro = async (payload, archivos) => {
 
     const dni_frente = archivos?.['dni_frente']?.[0];
     const dni_dorso = archivos?.['dni_dorso']?.[0];
+    const foto_perfil = archivos?.['foto_perfil']?.[0];
 
     if (!dni_frente || !dni_dorso) {
         throw new AppError('Se requieren las imágenes del DNI (frente y dorso)', 400);
@@ -450,6 +451,9 @@ const paso3Registro = async (payload, archivos) => {
     // Actualizar registro temporal
     registro.dni_frente = dni_frente.filename;
     registro.dni_dorso = dni_dorso.filename;
+    if (foto_perfil) {
+        registro.foto_perfil = foto_perfil.filename;
+    }
     registro.estado = 'paso3_completo';
     registro.estado_validacion = 'EN_REVISION';
 
@@ -509,7 +513,8 @@ const paso4Registro = async (payload) => {
                 direccion: registro.direccion,
                 email: registro.email,
                 estado: 'activo',
-                foto: Object.keys(fotoData).length > 0 ? JSON.stringify(fotoData) : null
+                foto: Object.keys(fotoData).length > 0 ? JSON.stringify(fotoData) : null,
+                foto_perfil: registro.foto_perfil || null
             })
             .select()
             .single();
@@ -565,7 +570,8 @@ const paso4Registro = async (payload) => {
         return {
             mensaje: 'Registro completado exitosamente',
             usuario_id: String(personaId),
-            token
+            token,
+            categoria: 'comun'
         };
     } else {
         // ----------------------------------------------------------------
@@ -595,6 +601,7 @@ const paso4Registro = async (payload) => {
             estado_registro: 'completo',
             // REC-06 fix: respetar el estado proveniente del paso 3, nunca forzar APROBADO
             estado_validacion: registro.estado_validacion || 'EN_REVISION',
+            foto_perfil: registro.foto_perfil || null,
             bloqueado: false,
             medios_pago: [medioPago],
             created_at: new Date().toISOString()
@@ -617,7 +624,8 @@ const paso4Registro = async (payload) => {
         return {
             mensaje: 'Registro completado exitosamente',
             usuario_id: usuarioId,
-            token
+            token,
+            categoria: nuevoUsuario.categoria
         };
     }
 };
@@ -893,7 +901,7 @@ const obtenerUsuarios = async () => {
     if (isConfigured) {
         const { data, error } = await supabase
             .from('personas')
-            .select('identificador, documento, nombre, direccion, estado, email')
+            .select('identificador, documento, nombre, direccion, estado, email, telefono, foto_perfil')
             .order('identificador', { ascending: true });
 
         if (error) {
@@ -906,7 +914,9 @@ const obtenerUsuarios = async () => {
             documento: persona.documento,
             direccion: persona.direccion,
             estado: persona.estado,
-            email: persona.email || null
+            email: persona.email || null,
+            telefono: persona.telefono || null,
+            foto_perfil: persona.foto_perfil || null
         }));
     }
 

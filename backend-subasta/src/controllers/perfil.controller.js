@@ -18,6 +18,24 @@ const actualizarPerfil = async (req, res, next) => {
     }
 };
 
+const subirFotoPerfil = async (req, res, next) => {
+    try {
+        const result = await perfilService.subirFotoPerfil(req.user, req.file);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const eliminarFotoPerfil = async (req, res, next) => {
+    try {
+        const result = await perfilService.eliminarFotoPerfil(req.user);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 const obtenerEstadisticas = async (req, res, next) => {
     try {
         const result = await perfilService.obtenerEstadisticas(req.user);
@@ -39,6 +57,8 @@ const obtenerRestricciones = async (req, res, next) => {
 module.exports = {
     obtenerPerfil,
     actualizarPerfil,
+    subirFotoPerfil,
+    eliminarFotoPerfil,
     obtenerEstadisticas,
     obtenerRestricciones
 };

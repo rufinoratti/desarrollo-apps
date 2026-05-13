@@ -25,6 +25,10 @@ const sanitizePerfilPayload = (payload = {}) => {
         sanitized.direccion = d;
     }
 
+    if (payload.telefono !== undefined) {
+        sanitized.telefono = String(payload.telefono).trim();
+    }
+
     return sanitized;
 };
 
@@ -76,15 +80,30 @@ const resolveClienteIdSupabase = async (authUser) => {
 };
 
 const fetchPersonaClienteSupabase = async (clienteId) => {
-    // Intento 1: con email
     let personaData = null;
     let personaError = null;
 
     ({ data: personaData, error: personaError } = await supabase
         .from('personas')
-        .select('identificador, documento, nombre, direccion, email, foto')
+        .select('identificador, documento, nombre, direccion, email, foto, telefono, foto_perfil')
         .eq('identificador', clienteId)
         .maybeSingle());
+
+    if (personaError && /column .*foto_perfil/i.test(personaError.message || '')) {
+        ({ data: personaData, error: personaError } = await supabase
+            .from('personas')
+            .select('identificador, documento, nombre, direccion, email, foto, telefono')
+            .eq('identificador', clienteId)
+            .maybeSingle());
+    }
+
+    if (personaError && /column .*telefono/i.test(personaError.message || '')) {
+        ({ data: personaData, error: personaError } = await supabase
+            .from('personas')
+            .select('identificador, documento, nombre, direccion, email, foto')
+            .eq('identificador', clienteId)
+            .maybeSingle());
+    }
 
     if (personaError && /column .*email/i.test(personaError.message || '')) {
         ({ data: personaData, error: personaError } = await supabase
@@ -100,7 +119,7 @@ const fetchPersonaClienteSupabase = async (clienteId) => {
 
     const { data: cliente, error: clienteError } = await supabase
         .from('clientes')
-        .select('categoria')
+        .select('categoria, numeropais')
         .eq('identificador', clienteId)
         .maybeSingle();
 
@@ -126,11 +145,14 @@ const obtenerPerfil = async (authUser) => {
             usuario_id: String(user.id),
             nombre_completo: user.nombre_completo || user.nombre || null,
             categoria: String(user.categoria || 'comun').toUpperCase(),
+            foto_url: user.foto_perfil || null,
             datos_personales: {
                 documento: user.documento || null,
                 nombre: user.nombre_completo || user.nombre || null,
                 direccion: user.domicilio_legal || user.direccion || null,
                 email: user.email || null,
+                telefono: user.telefono || null,
+                pais_residencia: user.pais_residencia ? String(user.pais_residencia) : null,
                 foto: user.foto || null
             },
             cuenta_cobro: parseCuentaCobro(cuentaBancaria)
@@ -157,11 +179,14 @@ const obtenerPerfil = async (authUser) => {
         usuario_id: String(persona?.identificador || clienteId),
         nombre_completo: persona?.nombre || null,
         categoria: String(cliente?.categoria || 'comun').toUpperCase(),
+        foto_url: persona?.foto_perfil || null,
         datos_personales: {
             documento: persona?.documento || null,
             nombre: persona?.nombre || null,
             direccion: persona?.direccion || null,
             email: persona?.email || null,
+            telefono: persona?.telefono || null,
+            pais_residencia: cliente?.numeropais ? String(cliente.numeropais) : null,
             foto: persona?.foto || null
         },
         cuenta_cobro: parseCuentaCobro(cuenta)
@@ -190,7 +215,12 @@ const actualizarPerfil = async (authUser, payload) => {
             user.domicilio_legal = sanitized.direccion;
         }
 
-        return { mensaje: 'Perfil actualizado correctamente' };
+        if (sanitized.telefono !== undefined) {
+            user.telefono = sanitized.telefono;
+        }
+
+        const updated = await obtenerPerfil(authUser);
+        return { mensaje: 'Perfil actualizado correctamente', ...updated };
     }
 
     const clienteId = await resolveClienteIdSupabase(authUser);
@@ -202,6 +232,9 @@ const actualizarPerfil = async (authUser, payload) => {
     if (sanitized.direccion !== undefined) {
         updateDb.direccion = sanitized.direccion;
     }
+    if (sanitized.telefono !== undefined) {
+        updateDb.telefono = sanitized.telefono;
+    }
 
     const { error } = await supabase
         .from('personas')
@@ -209,10 +242,76 @@ const actualizarPerfil = async (authUser, payload) => {
         .eq('identificador', clienteId);
 
     if (error) {
-        throw new AppError('Error al actualizar perfil: ' + error.message, 500);
+        // Si el error es columna inexistente, reintentar sin telefono
+        if (sanitized.telefono !== undefined && /column .*telefono/i.test(error.message || '')) {
+            delete updateDb.telefono;
+            const { error: retryError } = await supabase
+                .from('personas')
+                .update(updateDb)
+                .eq('identificador', clienteId);
+
+            if (retryError) {
+                throw new AppError('Error al actualizar perfil: ' + retryError.message, 500);
+            }
+        } else {
+            throw new AppError('Error al actualizar perfil: ' + error.message, 500);
+        }
     }
 
-    return { mensaje: 'Perfil actualizado correctamente' };
+    const updated = await obtenerPerfil(authUser);
+    return { mensaje: 'Perfil actualizado correctamente', ...updated };
+};
+
+const subirFotoPerfil = async (authUser, file) => {
+    if (!file) {
+        throw new AppError('No se recibió ninguna imagen', 400);
+    }
+
+    const filename = file.filename;
+
+    if (!isConfigured) {
+        const user = getLocalUser(authUser);
+        user.foto_perfil = filename;
+        const updated = await obtenerPerfil(authUser);
+        return { mensaje: 'Foto de perfil actualizada', ...updated };
+    }
+
+    const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { error: updateError } = await supabase
+        .from('personas')
+        .update({ foto_perfil: filename })
+        .eq('identificador', clienteId);
+
+    if (updateError) {
+        throw new AppError('Error al guardar foto de perfil: ' + updateError.message, 500);
+    }
+
+    const updated = await obtenerPerfil(authUser);
+    return { mensaje: 'Foto de perfil actualizada', ...updated };
+};
+
+const eliminarFotoPerfil = async (authUser) => {
+    if (!isConfigured) {
+        const user = getLocalUser(authUser);
+        user.foto_perfil = null;
+        const updated = await obtenerPerfil(authUser);
+        return { mensaje: 'Foto de perfil eliminada', ...updated };
+    }
+
+    const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { error: updateError } = await supabase
+        .from('personas')
+        .update({ foto_perfil: null })
+        .eq('identificador', clienteId);
+
+    if (updateError) {
+        throw new AppError('Error al eliminar foto de perfil: ' + updateError.message, 500);
+    }
+
+    const updated = await obtenerPerfil(authUser);
+    return { mensaje: 'Foto de perfil eliminada', ...updated };
 };
 
 const obtenerEstadisticasLocal = (authUser) => {
@@ -359,6 +458,8 @@ const obtenerRestricciones = async (authUser) => {
 module.exports = {
     obtenerPerfil,
     actualizarPerfil,
+    subirFotoPerfil,
+    eliminarFotoPerfil,
     obtenerEstadisticas,
     obtenerRestricciones
 };

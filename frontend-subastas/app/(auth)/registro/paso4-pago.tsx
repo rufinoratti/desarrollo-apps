@@ -87,7 +87,7 @@ export default function Paso4Pago() {
 
       if (response.status === 201) {
         // Exito total
-        saveToken(data.token, titular || 'Usuario', data.nivel);
+        saveToken(data.token, titular || 'Usuario', data.categoria);
         clearRegistrationData();
         router.replace('/(tabs)');
       } else {
