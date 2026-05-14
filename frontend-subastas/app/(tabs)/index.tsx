@@ -200,10 +200,10 @@ const fetchCategorias = async () => {
             </View>
 
             <Text style={[styles.sectionTitle, { marginLeft: 20, marginBottom: 16 }]}>GESTIÓN DE FONDOS</Text>
-            <View style={styles.walletBanner}>
+            <TouchableOpacity style={styles.walletBanner} onPress={() => router.push('/(tabs)/billetera')}>
               <Text style={styles.walletText}>BILLETERA</Text>
               <Ionicons name="wallet-outline" size={32} color="#FFF" />
-            </View>
+            </TouchableOpacity>
 
             <Text style={[styles.sectionTitle2, { marginLeft: 20, marginTop: 10 }]}>Subastas Activas</Text>
 

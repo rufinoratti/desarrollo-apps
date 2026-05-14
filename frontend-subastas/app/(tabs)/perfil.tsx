@@ -515,7 +515,7 @@ export default function Perfil() {
             <Text style={styles.menuItemText}>Medios de Pago</Text>
             <Ionicons name="chevron-forward" size={20} color="#888" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/historial')}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/metricas-historial')}>
             <Text style={styles.menuItemText}>Métricas e Historial</Text>
             <Ionicons name="chevron-forward" size={20} color="#888" />
           </TouchableOpacity>

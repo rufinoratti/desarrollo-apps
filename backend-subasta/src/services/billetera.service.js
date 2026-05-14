@@ -114,31 +114,66 @@ const getLocalUser = (authUser) => {
     return user;
 };
 
-const resolveClienteIdSupabase = async (authUser) => {
-    const asNumber = Number(authUser?.id);
-    if (!Number.isNaN(asNumber)) {
-        return asNumber;
-    }
-
-    if (!authUser?.email) {
-        throw new AppError('No autenticado', 401);
-    }
-
-    const { data: persona, error } = await supabase
-        .from('personas')
+const ensureClienteRecord = async (personaId) => {
+    const { data: existing } = await supabase
+        .from('clientes')
         .select('identificador')
-        .eq('email', authUser.email)
+        .eq('identificador', personaId)
         .maybeSingle();
 
+    if (existing?.identificador) return existing.identificador;
+
+    const { error } = await supabase
+        .from('clientes')
+        .insert({
+            identificador: personaId,
+            numeropais: 1,
+            admitido: 'si',
+            categoria: 'comun',
+        });
+
     if (error) {
-        throw new AppError('Error al resolver usuario: ' + error.message, 500);
+        throw new AppError('Error al crear registro de cliente: ' + error.message, 500);
     }
 
-    if (!persona?.identificador) {
+    return personaId;
+};
+
+const resolveClienteIdSupabase = async (authUser) => {
+    if (!authUser) {
         throw new AppError('No autenticado', 401);
     }
 
-    return persona.identificador;
+    if (authUser.email) {
+        const { data: persona, error } = await supabase
+            .from('personas')
+            .select('identificador')
+            .eq('email', authUser.email)
+            .maybeSingle();
+
+        if (error) {
+            throw new AppError('Error al resolver usuario: ' + error.message, 500);
+        }
+
+        if (persona?.identificador) {
+            return ensureClienteRecord(persona.identificador);
+        }
+    }
+
+    const asNumber = Number(authUser.id);
+    if (!Number.isNaN(asNumber) && asNumber > 0) {
+        const { data: persona } = await supabase
+            .from('personas')
+            .select('identificador')
+            .eq('identificador', asNumber)
+            .maybeSingle();
+
+        if (persona?.identificador) {
+            return ensureClienteRecord(persona.identificador);
+        }
+    }
+
+    throw new AppError('No autenticado', 401);
 };
 
 const listarMediosPago = async (authUser) => {
@@ -161,6 +196,47 @@ const listarMediosPago = async (authUser) => {
     return (data || []).map(mapMedioToApi);
 };
 
+const obtenerMedioPago = async (authUser, medioId) => {
+    if (!medioId) {
+        throw new AppError('Medio de pago no encontrado', 404);
+    }
+
+    if (!isConfigured) {
+        const user = getLocalUser(authUser);
+        const medio = user.medios_pago.find((m) => String(m.id) === String(medioId));
+        if (!medio) throw new AppError('Medio de pago no encontrado', 404);
+        return {
+            ...mapMedioToApi(medio),
+            entidad: medio.entidad || '',
+            moneda: medio.moneda || 'ARS',
+            limite_garantia: medio.limite_garantia || 0
+        };
+    }
+
+    const clienteId = await resolveClienteIdSupabase(authUser);
+    const { data, error } = await supabase
+        .from('mediosdepago')
+        .select('*')
+        .eq('identificador', Number(medioId))
+        .eq('cliente_id', clienteId)
+        .maybeSingle();
+
+    if (error) {
+        throw new AppError('Error al obtener medio de pago: ' + error.message, 500);
+    }
+
+    if (!data) {
+        throw new AppError('Medio de pago no encontrado', 404);
+    }
+
+    return {
+        ...mapMedioToApi(data),
+        entidad: data.entidad || '',
+        moneda: data.moneda || 'ARS',
+        limite_garantia: data.limite_garantia || 0
+    };
+};
+
 const agregarMedioPago = async (authUser, payload) => {
     const parsed = parsePayloadMedio(payload || {});
 
@@ -172,7 +248,7 @@ const agregarMedioPago = async (authUser, payload) => {
             id: nextId('mp', 'medioPago'),
             tipo: parsed.tipo,
             entidad: parsed.entidad,
-            verificado: 'no',
+            verificado: 'si',
             es_principal: isFirst ? 'si' : 'no',
             detalles_enmascarados: parsed.detalles_enmascarados,
             moneda: parsed.moneda,
@@ -207,7 +283,7 @@ const agregarMedioPago = async (authUser, payload) => {
             cliente_id: clienteId,
             tipo: parsed.tipo,
             entidad: parsed.entidad,
-            verificado: 'no',
+            verificado: 'si',
             es_principal: esPrincipal,
             detalles_enmascarados: parsed.detalles_enmascarados,
             moneda: parsed.moneda,
@@ -388,8 +464,10 @@ const tieneMedioCompatibleMoneda = async ({ authUser, monedaSubasta }) => {
 
 module.exports = {
     listarMediosPago,
+    obtenerMedioPago,
     agregarMedioPago,
     eliminarMedioPago,
     verificarLimiteCheque,
-    tieneMedioCompatibleMoneda
+    tieneMedioCompatibleMoneda,
+    parsePayloadMedio
 };

@@ -10,6 +10,9 @@ router.get('/billetera/medios-pago', authMiddleware, billeteraController.listarM
 // POST /api/billetera/medios-pago
 router.post('/billetera/medios-pago', authMiddleware, billeteraController.agregarMedioPago);
 
+// GET /api/billetera/medios-pago/:id
+router.get('/billetera/medios-pago/:id', authMiddleware, billeteraController.obtenerMedioPago);
+
 // DELETE /api/billetera/medios-pago/:id
 router.delete('/billetera/medios-pago/:id', authMiddleware, billeteraController.eliminarMedioPago);
 

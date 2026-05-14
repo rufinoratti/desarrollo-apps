@@ -86,7 +86,8 @@ const BANCOS = [
     { id: 3, nombre: 'BBVA Argentina', codigo: '017' },
     { id: 4, nombre: 'Santander', codigo: '072' },
     { id: 5, nombre: 'Banco Macro', codigo: '285' },   // BUG-06 fix: código correcto es 285
-    { id: 6, nombre: 'ICBC', codigo: '015' }
+    { id: 6, nombre: 'ICBC', codigo: '015' },
+    { id: 7, nombre: 'Mercado Pago', codigo: '029' },
 ];
 
 // ============================================================
@@ -545,19 +546,25 @@ const paso4Registro = async (payload) => {
             throw new AppError('Error al crear cliente: ' + clienteError.message, 500);
         }
 
-        const medioPago = {
-            id: nextId('mp', 'medioPago'),
-            tipo: tipoPagoNormalizado,
-            descripcion: `${tipoPagoNormalizado} - ${detalles.titular || ''}`,
-            verificado: false,
-            numero_tarjeta: detalles.numero_tarjeta,
-            cbu_alias: detalles.cbu_alias,
-            banco: detalles.banco,
-            cliente_id: personaId
-        };
+        const billeteraService = require('./billetera.service');
+        const parsedMedio = billeteraService.parsePayloadMedio({ tipo_pago, detalles, moneda: 'ARS' });
 
-        if (!store.mediosPago) store.mediosPago = [];
-        store.mediosPago.push(medioPago);
+        const { error: medioError } = await supabase
+            .from('mediosdepago')
+            .insert({
+                cliente_id: personaId,
+                tipo: parsedMedio.tipo,
+                entidad: parsedMedio.entidad,
+                verificado: 'si',
+                es_principal: 'si',
+                detalles_enmascarados: parsedMedio.detalles_enmascarados,
+                moneda: parsedMedio.moneda,
+                limite_garantia: parsedMedio.limite_garantia
+            });
+
+        if (medioError) {
+            throw new AppError('Error al crear medio de pago: ' + medioError.message, 500);
+        }
 
         // REC-03 fix: incluir categoria en el JWT
         const token = crearTokenJWT({

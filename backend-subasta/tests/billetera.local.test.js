@@ -32,7 +32,7 @@ test('agregarMedioPago CUENTA_BANCARIA agrega medio y devuelve 201 payload', asy
     const after = (store.users.find((u) => u.id === authUser.id)?.medios_pago || []).length;
     assert.equal(after, before + 1);
     assert.ok(result.id);
-    assert.equal(result.estado, 'EN_REVISION');
+    assert.equal(result.estado, 'VERIFICADA');
 });
 
 test('eliminarMedioPago no permite eliminar único medio de pago', async () => {

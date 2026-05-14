@@ -55,6 +55,8 @@
           }}
         />
         <Tabs.Screen name="billetera" options={{ href: null }} />
+        <Tabs.Screen name="medio-pago-detalle" options={{ href: null }} />
+        <Tabs.Screen name="metricas-historial" options={{ href: null }} />
         <Tabs.Screen name="historial" options={{ href: null }} />
       </Tabs>
     );
