@@ -86,7 +86,8 @@ const BANCOS = [
     { id: 3, nombre: 'BBVA Argentina', codigo: '017' },
     { id: 4, nombre: 'Santander', codigo: '072' },
     { id: 5, nombre: 'Banco Macro', codigo: '285' },   // BUG-06 fix: código correcto es 285
-    { id: 6, nombre: 'ICBC', codigo: '015' }
+    { id: 6, nombre: 'ICBC', codigo: '015' },
+    { id: 7, nombre: 'Mercado Pago', codigo: '029' },
 ];
 
 // ============================================================
