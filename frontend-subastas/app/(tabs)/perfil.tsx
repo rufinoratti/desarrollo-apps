@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  AlertButton,
   Image,
   RefreshControl,
 } from 'react-native';
@@ -316,14 +317,14 @@ export default function Perfil() {
   };
 
   const handlePickPhoto = () => {
-    const options = [
-      { text: 'CÁMARA', onPress: handlePickPhotoFromCamera },
-      { text: 'GALERÍA', onPress: handlePickPhotoFromGallery },
+    const options: AlertButton[] = [
+      { text: 'Cámara', onPress: handlePickPhotoFromCamera },
+      { text: 'Galería', onPress: handlePickPhotoFromGallery },
     ];
     if (perfil?.usuario?.foto_url) {
-      options.push({ text: 'ELIMINAR FOTO', onPress: handleDeletePhoto, style: 'destructive' as const });
+      options.push({ text: 'Eliminar foto', onPress: handleDeletePhoto, style: 'destructive' });
     }
-    options.push({ text: 'CANCELAR', style: 'cancel' as const });
+    options.push({ text: 'Cancelar', style: 'cancel' });
     Alert.alert('Foto de perfil', 'Elige una opción', options);
   };
 

@@ -205,7 +205,7 @@ const fetchCategorias = async () => {
               <Ionicons name="wallet-outline" size={32} color="#FFF" />
             </TouchableOpacity>
 
-            <Text style={[styles.sectionTitle2, { marginLeft: 20, marginTop: 10 }]}>Subastas Activas</Text>
+            <Text style={[styles.sectionTitle, { marginLeft: 20, marginBottom: 16}]}>SUBASTAS ACTIVAS</Text>
 
             {loadingSubastas && subastas.length === 0 && (
               <View style={{ paddingHorizontal: 20 }}>
