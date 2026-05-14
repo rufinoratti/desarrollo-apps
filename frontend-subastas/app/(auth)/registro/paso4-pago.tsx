@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Input } from '@/src/components/Input';
 import { Select } from '@/src/components/Select';
 import { Button } from '@/src/components/Button';
@@ -13,8 +13,10 @@ import { API_URL } from '@/src/config/env';
 type MetodoPago = 'CUENTA_BANCARIA' | 'TARJETA' | 'CHEQUE';
 
 export default function Paso4Pago() {
+  const { addOnly } = useLocalSearchParams<{ addOnly?: string }>();
+  const isAddOnly = addOnly === 'true';
   const { registrationData, clearRegistrationData } = useRegistration();
-  const { saveToken } = useAuth();
+  const { token, saveToken } = useAuth();
   
   const [metodo, setMetodo] = useState<MetodoPago>('CUENTA_BANCARIA');
   const [loading, setLoading] = useState(false);
@@ -58,40 +60,63 @@ export default function Paso4Pago() {
   };
 
   const handleSubmit = async () => {
-    if (!registrationData.registro_id) {
-      Alert.alert('Error', 'ID de registro no encontrado.');
-      return;
-    }
-
     setLoading(true);
     try {
-      const payload: any = {
-        registro_id: registrationData.registro_id,
-        tipo_pago: metodo,
-        detalles: {}
-      };
+      const detalles: any = {};
 
       if (metodo === 'CUENTA_BANCARIA') {
-        payload.detalles = { cbu_alias: cbu, titular, banco: bancoNombre };
+        detalles.cbu_alias = cbu;
+        detalles.titular = titular;
+        detalles.banco = bancoNombre;
       } else if (metodo === 'TARJETA') {
-        payload.detalles = { numero_tarjeta: tarjeta.replace(/\s/g, ''), cvv, fecha_expiracion: fechaExp, titular };
+        detalles.numero_tarjeta = tarjeta.replace(/\s/g, '');
+        detalles.cvv = cvv;
+        detalles.fecha_expiracion = fechaExp;
+        detalles.titular = titular;
       }
 
-      const response = await fetch(`${API_URL}/api/auth/registro/paso4-pago`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      if (isAddOnly) {
+        const response = await fetch(`${API_URL}/api/billetera/medios-pago`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ tipo_pago: metodo, detalles })
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.status === 201) {
-        // Exito total
-        saveToken(data.token, titular || 'Usuario', data.categoria);
-        clearRegistrationData();
-        router.replace('/(tabs)');
+        if (response.status === 201) {
+          Alert.alert('Éxito', 'Medio de pago agregado correctamente');
+          router.back();
+        } else {
+          Alert.alert('Error', data.error || 'Ocurrió un error');
+        }
       } else {
-        Alert.alert('Error', data.error || 'Ocurrió un error');
+        if (!registrationData.registro_id) {
+          Alert.alert('Error', 'ID de registro no encontrado.');
+          return;
+        }
+
+        const payload: any = {
+          registro_id: registrationData.registro_id,
+          tipo_pago: metodo,
+          detalles
+        };
+
+        const response = await fetch(`${API_URL}/api/auth/registro/paso4-pago`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.status === 201) {
+          saveToken(data.token, titular || 'Usuario', data.categoria);
+          clearRegistrationData();
+          router.replace('/(tabs)');
+        } else {
+          Alert.alert('Error', data.error || 'Ocurrió un error');
+        }
       }
     } catch (err) {
       console.error(err);

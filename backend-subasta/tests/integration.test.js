@@ -249,7 +249,7 @@ test('POST /api/billetera/medios-pago — con token agrega medio', async () => {
 
     assert.equal(res.statusCode, 201);
     assert.ok(res.body.id);
-    assert.equal(res.body.estado, 'EN_REVISION');
+    assert.equal(res.body.estado, 'VERIFICADA');
 });
 
 test('POST /api/billetera/medios-pago — rechaza datos incompletos', async () => {

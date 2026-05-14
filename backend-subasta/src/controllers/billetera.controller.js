@@ -18,6 +18,15 @@ const agregarMedioPago = async (req, res, next) => {
     }
 };
 
+const obtenerMedioPago = async (req, res, next) => {
+    try {
+        const result = await billeteraService.obtenerMedioPago(req.user, req.params.id);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 const eliminarMedioPago = async (req, res, next) => {
     try {
         const result = await billeteraService.eliminarMedioPago(req.user, req.params.id);
@@ -29,6 +38,7 @@ const eliminarMedioPago = async (req, res, next) => {
 
 module.exports = {
     listarMediosPago,
+    obtenerMedioPago,
     agregarMedioPago,
     eliminarMedioPago
 };
