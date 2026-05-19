@@ -39,6 +39,8 @@ tags:
     description: Proceso de pago y liquidación de lotes ganados
   - name: 9. Vendedor (Mis Bienes)
     description: Gestión de artículos en venta
+  - name: 10. Rematix Interno (BackOffice)
+    description: Gestion de usuarios, articulos, subastas
 
 paths:
   # ==========================================
@@ -1725,6 +1727,220 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+# ==========================================
+# 10. REMATIX INTERNO (BACKOFFICE)
+# ==========================================
+
+/admin/clientes/{id}/evaluacion:
+  put:
+    tags:
+      - 10. Rematix Interno
+    summary: Evaluar y Categorizar Cliente
+    description: |
+      Permite a un empleado interno validar a un cliente registrado.
+      Se puede admitir o rechazar su ingreso, y en caso afirmativo,
+      asignarle una categoría de acceso (comun, plata, oro, platino).
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: ID único del cliente a evaluar (identificador)
+        required: true
+        schema:
+          type: integer
+          example: 15
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - admitido
+            properties:
+              admitido:
+                type: string
+                enum: [si, no]
+                description: Define si el cliente es aceptado en la plataforma.
+                example: "si"
+              categoria:
+                type: string
+                enum: [comun, especial, plata, oro, platino]
+                description: Rango asignado al cliente si es admitido.
+                example: "oro"
+    responses:
+      "200":
+        description: Cliente evaluado y actualizado correctamente.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mensaje:
+                  type: string
+                  example: "Cliente evaluado exitosamente."
+                cliente_id:
+                  type: integer
+                  example: 15
+      "401":
+        description: No autenticado / Token inválido
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "403":
+        description: Acceso denegado. Se requieren permisos de empleado.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "404":
+        description: Cliente no encontrado
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "500":
+        description: Error interno del servidor
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+
+/admin/productos/{id}/evaluacion:
+  put:
+    tags:
+      - 10. Rematix Interno
+    summary: Evaluar Producto Publicado
+    description: |
+      Endpoint para que el tasador/revisor interno apruebe o rechace un ítem
+      propuesto por un usuario dueño. Si se aprueba, pasa a estar disponible
+      y se le puede asignar una póliza de seguro y descripción comercial.
+    security:
+      - bearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        description: ID único del producto (identificador)
+        required: true
+        schema:
+          type: integer
+          example: 12
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - disponible
+              - revisor
+            properties:
+              disponible:
+                type: string
+                enum: [si, no]
+                description: 'si' para aprobar e incorporar al inventario, 'no' para rechazar.
+                example: "si"
+              revisor:
+                type: integer
+                description: ID del empleado que realiza la revisión.
+                example: 102
+              descripcioncatalogo:
+                type: string
+                description: Título o reseña comercial pulida para el catálogo.
+                example: "Reloj Rolex Daytona Oro Blanco 18k"
+              seguro:
+                type: string
+                description: Número de póliza de seguro asignada al producto (nropoliza).
+                example: "POLIZA-001"
+    responses:
+      "200":
+        description: Estado del producto actualizado correctamente.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mensaje:
+                  type: string
+                  example: "El producto ha sido verificado por el tasador."
+      "401":
+        description: No autenticado
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "404":
+        description: Producto no encontrado
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+      "500":
+        description: Error interno del servidor
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ErrorResponse"
+
+/admin/subastas:
+  post:
+    tags:
+      - 10. Rematix Interno
+    summary: Crear Nueva Subasta (Evento)
+    description: |
+      Permite al personal administrativo dar de alta un nuevo evento de subasta
+      especificando las reglas operativas, categoría requerida y temática.
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - fecha
+              - hora
+              - nombre
+              - categoria
+              - tematica
+            properties:
+              nombre:
+                type: string
+                example: "Subasta Especial de Mobiliario Mid Century"
+              fecha:
+                type: string
+                format: date
+                description: Fecha de realización (Debe ser mayor a CURRENT_DATE + 10 días por regla de negocio).
+                example: "2026-06-15"
+              hora:
+                type: string
+                example: "18:00:00"
+              ubicacion:
+                type: string
+                example: "Salón Alvear, CABA"
+              capacidadasistentes:
+                type: integer
+                example: 120
+              tienedeposito:
+                type: string
+                enum: [si, no]
+                example: "si"
+              seguridadpropia:
+                type: string
+                enum: [si, no]
+                example: "si"
+              categoria:
+                type: string
+                enum: [comun, especial, plata, oro, platino]
+                example: "oro"
+              tematica:
+                type: integer
+                description: ID de la categoría temática asociada.
+                example:
+                
 
 # ==========================================
 # COMPONENTES REUTILIZABLES
