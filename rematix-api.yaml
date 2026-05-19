@@ -1762,6 +1762,18 @@ paths:
       responses:
         "200":
           description: Cliente evaluado exitosamente.
+        "401":
+          description: No autorizado (Token faltante o inválido).
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "403":
+          description: Prohibido (No tiene permisos de empleado).
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "404":
+          description: Cliente no encontrado.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "500":
+          description: Error interno del servidor.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
 
   /admin/productos/{id}/evaluacion:
     put:
@@ -1797,6 +1809,18 @@ paths:
       responses:
         "200":
           description: Estado del producto actualizado.
+        "401":
+          description: No autorizado.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "403":
+          description: Permisos insuficientes.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "404":
+          description: Producto no encontrado.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "500":
+          description: Error interno del servidor.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
 
   /admin/subastas:
     post:
@@ -1826,7 +1850,19 @@ paths:
       responses:
         "201":
           description: Subasta creada exitosamente.
-
+        "400":
+          description: Datos de subasta inválidos (Ej:fecha pasada).
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "401":
+          description: No autorizado.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "403":
+          description: Permisos insuficientes.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+        "500":
+          description: Error interno del servidor.
+          content: {application/json: {schema: {$ref: "#/components/schemas/ErrorResponse"}}}
+          
 # ==========================================
 # COMPONENTES REUTILIZABLES
 # ==========================================
