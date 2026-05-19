@@ -39,6 +39,8 @@ tags:
     description: Proceso de pago y liquidación de lotes ganados
   - name: 9. Vendedor (Mis Bienes)
     description: Gestión de artículos en venta
+  - name: 10. Rematix Interno
+    description: Gestion de usuarios, articulos, subastas
 
 paths:
   # ==========================================
@@ -66,7 +68,7 @@ paths:
                   nombre_completo: Milagros Peledrotti
                   documento: "35111222"
                   direccion: Av. Alvear 1820
-                  pais_residencia: 1
+                  pais_residencia: Argentina
                   email: usuario@mail.com
       responses:
         "201":
@@ -1725,6 +1727,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+# ==========================================
+  # 10. REMATIX INTERNO (BACKOFFICE)
+  # ==========================================
+
+  /admin/clientes/{id}/evaluacion:
+    put:
+      tags:
+        - 10. Rematix Interno
+      summary: Evaluar y Categorizar Cliente
+      description: Permite a un empleado interno validar a un cliente registrado, admitirlo o rechazarlo, y asignar categoría.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [admitido]
+              properties:
+                admitido:
+                  type: string
+                  enum: [si, no]
+                categoria:
+                  type: string
+                  enum: [comun, especial, plata, oro, platino]
+      responses:
+        "200":
+          description: Cliente evaluado exitosamente.
+
+  /admin/productos/{id}/evaluacion:
+    put:
+      tags:
+        - 10. Rematix Interno
+      summary: Evaluar Producto Publicado
+      description: Tasador/revisor interno aprueba o rechaza un ítem propuesto.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [disponible, revisor]
+              properties:
+                disponible:
+                  type: string
+                  enum: [si, no]
+                revisor:
+                  type: integer
+                descripcioncatalogo:
+                  type: string
+                seguro:
+                  type: string
+      responses:
+        "200":
+          description: Estado del producto actualizado.
+
+  /admin/subastas:
+    post:
+      tags:
+        - 10. Rematix Interno
+      summary: Crear Nueva Subasta
+      description: Permite al personal administrativo dar de alta un nuevo evento de subasta.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fecha, hora, nombre, categoria, tematica]
+              properties:
+                nombre: {type: string}
+                fecha: {type: string, format: date}
+                hora: {type: string}
+                ubicacion: {type: string}
+                capacidadasistentes: {type: integer}
+                tienedeposito: {type: string, enum: [si, no]}
+                seguridadpropia: {type: string, enum: [si, no]}
+                categoria: {type: string}
+                tematica: {type: integer}
+      responses:
+        "201":
+          description: Subasta creada exitosamente.
 
 # ==========================================
 # COMPONENTES REUTILIZABLES
@@ -1768,8 +1869,8 @@ components:
           example: Av. Alvear 1820
           minLength: 5
         pais_residencia:
-          type: integer
-          example: 1
+          type: string
+          example: Argentina
         email:
           type: string
           format: email
