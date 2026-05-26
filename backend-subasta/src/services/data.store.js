@@ -189,6 +189,9 @@ const store = {
     /** Solicitudes de artículos para subastar. */
     articleRequests: [],
 
+    /** Productos publicados (pendientes de evaluación). */
+    productos: [],
+
     /** Registros temporales en proceso de registro de usuarios. */
     registrosTemporales: [],
 
@@ -208,7 +211,9 @@ const counters = {
     medioPago: 2,
     bid: 2,
     articleReq: 1,
-    registroTemp: 1
+    registroTemp: 1,
+    subasta: 5,
+    producto: 1
 };
 
 /**

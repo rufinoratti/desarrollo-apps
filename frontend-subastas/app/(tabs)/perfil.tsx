@@ -54,7 +54,7 @@ interface RestriccionesData {
 }
 
 export default function Perfil() {
-  const { token, nombre, saveToken, removeToken } = useAuth();
+  const { token, nombre, email, pending, saveToken, removeToken } = useAuth();
   const [loading, setLoading] = useState(true);
   const [perfil, setPerfil] = useState<PerfilData | null>(null);
   const [restricciones, setRestricciones] = useState<RestriccionesData | null>(null);
@@ -116,6 +116,10 @@ export default function Perfil() {
   }, [fetchPerfil]);
 
   useEffect(() => {
+    if (pending && !token) {
+      setLoading(false);
+      return;
+    }
     fetchPerfil();
   }, [fetchPerfil]);
 
@@ -356,6 +360,25 @@ export default function Perfil() {
     );
   }
 
+  if (pending && !token) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>REMATIX</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <View style={styles.pendingFull}>
+          <Text style={styles.pendingTitle}>USUARIO EN VALIDACIÓN</Text>
+          <Text style={styles.pendingText}>Tu cuenta aún no fue aprobada. Podés cerrar sesión y volver más tarde.</Text>
+          <Button title="CERRAR SESIÓN" onPress={handleLogout} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!perfil) {
     return (
       <SafeAreaView style={styles.container}>
@@ -374,6 +397,7 @@ export default function Perfil() {
   }
 
   const tieneDeuda = restricciones?.restriccion_activa;
+  const isAdmin = String(email || '').toLowerCase() === 'admin@rematix.com';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -423,6 +447,13 @@ export default function Perfil() {
           )}
           <Text style={styles.nivel}>CATEGORÍA: {perfil.usuario.nivel}</Text>
         </View>
+
+        {pending && !token && (
+          <View style={styles.pendingCard}>
+            <Text style={styles.pendingTitle}>USUARIO EN VALIDACIÓN</Text>
+            <Text style={styles.pendingText}>Solo podés cerrar sesión hasta que un admin apruebe tu cuenta.</Text>
+          </View>
+        )}
 
         {/* Datos Personales */}
         <View style={styles.section}>
@@ -507,6 +538,14 @@ export default function Perfil() {
               onPress={() => router.push('/(tabs)/billetera')}
               style={styles.cobroButton}
             />
+          </View>
+        )}
+
+        {isAdmin && (
+          <View style={styles.adminCard}>
+            <Text style={styles.adminTitle}>PANEL ADMIN</Text>
+            <Text style={styles.adminSubtitle}>Validar clientes, productos y subastas</Text>
+            <Button title="IR AL PANEL" onPress={() => router.push('/admin' as any)} />
           </View>
         )}
 
@@ -718,6 +757,50 @@ const styles = StyleSheet.create({
   },
   cobroField: {
     marginBottom: 16,
+  },
+  adminCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  adminTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: '#000',
+    marginBottom: 6,
+  },
+  adminSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  pendingCard: {
+    backgroundColor: '#FFF8E1',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  pendingTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: '#8D6E63',
+    marginBottom: 6,
+  },
+  pendingText: {
+    fontSize: 13,
+    color: '#8D6E63',
+  },
+  pendingFull: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center',
   },
   cbuRow: {
     flexDirection: 'row',
