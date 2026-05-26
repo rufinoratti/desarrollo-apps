@@ -536,8 +536,8 @@ const paso4Registro = async (payload) => {
             .insert({
                 identificador: personaId,
                 numeropais: registro.pais_residencia,
-                admitido: 'si',
-                categoria: 'comun',
+                admitido: null,
+                categoria: null,
             })
             .select()
             .single();
@@ -566,23 +566,15 @@ const paso4Registro = async (payload) => {
             throw new AppError('Error al crear medio de pago: ' + medioError.message, 500);
         }
 
-        // REC-03 fix: incluir categoria en el JWT
-        const token = crearTokenJWT({
-            usuario_id: personaId,
-            email: registro.email,
-            categoria: 'comun'
-        });
-
         // Limpiar registro temporal
         store.registrosTemporales = store.registrosTemporales.filter(
             (r) => r.registro_id !== registro_id
         );
 
         return {
-            mensaje: 'Registro completado exitosamente',
+            mensaje: 'Registro completado. Usuario en validación.',
             usuario_id: String(personaId),
-            token,
-            categoria: 'comun'
+            estado_validacion: 'EN_REVISION'
         };
     } else {
         // ----------------------------------------------------------------
@@ -608,12 +600,12 @@ const paso4Registro = async (payload) => {
             pais_residencia: registro.pais_residencia,
             email: registro.email,
             passwordHash: registro.passwordHash,
-            categoria: 'comun',
+            categoria: null,
             estado_registro: 'completo',
             // REC-06 fix: respetar el estado proveniente del paso 3, nunca forzar APROBADO
             estado_validacion: registro.estado_validacion || 'EN_REVISION',
             foto_perfil: registro.foto_perfil || null,
-            bloqueado: false,
+            bloqueado: true,
             medios_pago: [medioPago],
             created_at: new Date().toISOString()
         };
@@ -625,18 +617,10 @@ const paso4Registro = async (payload) => {
             (r) => r.registro_id !== registro_id
         );
 
-        // REC-03 fix: incluir categoria en el JWT
-        const token = crearTokenJWT({
-            usuario_id: usuarioId,
-            email: nuevoUsuario.email,
-            categoria: nuevoUsuario.categoria
-        });
-
         return {
-            mensaje: 'Registro completado exitosamente',
+            mensaje: 'Registro completado. Usuario en validación.',
             usuario_id: usuarioId,
-            token,
-            categoria: nuevoUsuario.categoria
+            estado_validacion: nuevoUsuario.estado_validacion
         };
     }
 };
@@ -695,11 +679,18 @@ const login = async (payload) => {
         // Obtener categoria del cliente
         const { data: clienteData } = await supabase
             .from('clientes')
-            .select('categoria')
+            .select('categoria, admitido')
             .eq('identificador', userData?.identificador)
             .maybeSingle();
 
         const categoria = clienteData?.categoria || 'comun';
+        const admitido = clienteData?.admitido;
+
+        if (String(admitido || '').toLowerCase() === 'no') {
+            const err = new AppError('Usuario en validación', 403);
+            err.codigo = 'USUARIO_EN_REVISION';
+            throw err;
+        }
 
         // REC-03 fix: incluir categoria en el JWT
         const token = crearTokenJWT({
@@ -733,6 +724,12 @@ const login = async (payload) => {
             const error = new AppError('Email o contraseña incorrectos', 401);
             error.codigo = 'CREDENCIALES_INVALIDAS';
             throw error;
+        }
+
+        if (usuario.estado_validacion && usuario.estado_validacion !== 'APROBADO') {
+            const err = new AppError('Usuario en validación', 403);
+            err.codigo = 'USUARIO_EN_REVISION';
+            throw err;
         }
 
         if (usuario.bloqueado) {
