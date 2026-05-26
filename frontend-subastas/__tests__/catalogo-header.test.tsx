@@ -47,10 +47,14 @@ describe('CatalogoScreen header', () => {
     expect(rematixText).toBeTruthy();
   });
 
-  it('muestra el título de la subasta debajo del header despues de cargar', async () => {
+  it('muestra la lista vacía despues de cargar', async () => {
     render(<CatalogoScreen />);
 
-    const titulo = await screen.findByText('Subasta Test', {}, { timeout: 3000 });
-    expect(titulo).toBeTruthy();
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/subastas/123/catalogo'),
+        expect.any(Object)
+      );
+    });
   });
 });

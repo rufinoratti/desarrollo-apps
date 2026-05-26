@@ -94,8 +94,38 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
             throw new AppError('Error al obtener subastas: ' + error.message, 500);
         }
 
-        // 3. MAPEO PARA EL FRONTEND
-        const subastas = (data || []).map(formatearSubastaResumen);
+        // 3. CONTAR ARTÍCULOS POR SUBASTA
+        const subastaIds = (data || []).map((s) => s.identificador).filter(Boolean);
+        let itemsPorSubasta = {};
+
+        if (subastaIds.length) {
+            const { data: catalogos } = await supabase
+                .from('catalogos')
+                .select('identificador, subasta')
+                .in('subasta', subastaIds);
+
+            const catalogoIds = (catalogos || []).map((c) => c.identificador).filter(Boolean);
+
+            if (catalogoIds.length) {
+                const { data: items } = await supabase
+                    .from('itemscatalogo')
+                    .select('catalogo')
+                    .in('catalogo', catalogoIds);
+
+                const itemsCount = {};
+                for (const it of items || []) {
+                    itemsCount[it.catalogo] = (itemsCount[it.catalogo] || 0) + 1;
+                }
+
+                for (const cat of catalogos || []) {
+                    const prev = itemsPorSubasta[cat.subasta] || 0;
+                    itemsPorSubasta[cat.subasta] = prev + (itemsCount[cat.identificador] || 0);
+                }
+            }
+        }
+
+        // 4. MAPEO PARA EL FRONTEND
+        const subastas = (data || []).map((row) => formatearSubastaResumen(row, itemsPorSubasta[row.identificador] || 0));
         const total = count || 0;
 
         return {
@@ -124,7 +154,10 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
         }
 
         const ordenadas = ordenarSubastasLocales(resultado);
-        const subastas = ordenadas.slice(desde, hasta + 1);
+        const subastas = ordenadas.slice(desde, hasta + 1).map((s) => ({
+            ...s,
+            cantidad_articulos: s.cantidad_articulos ?? (Array.isArray(s.items) ? s.items.length : s.total_items ?? 0)
+        }));
         const total = ordenadas.length;
 
         return {
@@ -143,7 +176,7 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
 /**
  * Mapea una fila de Supabase (esquema del profe) al formato SubastaResumen del Swagger.
  */
-const formatearSubastaResumen = (row) => ({
+const formatearSubastaResumen = (row, totalItems = 0) => ({
     id: row.identificador,
     titulo: row.nombre || `Subasta #${row.identificador}`,
     categoria_id: row.tematica,
@@ -158,7 +191,7 @@ const formatearSubastaResumen = (row) => ({
     fecha_fin: null,
     nivel_acceso: row.categoria,
     precio_base_minimo: null,
-    total_items: 0
+    cantidad_articulos: totalItems
 });
 
 module.exports = {

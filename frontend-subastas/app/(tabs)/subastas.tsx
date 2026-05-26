@@ -14,7 +14,8 @@ interface Categoria {
 const NIVELES: Record<string, number> = { BASE: 0, ORO: 1, PLATINO: 2 };
 
 interface SubastaItem {
-  subasta_id: string;
+  id?: string | number;
+  subasta_id?: string;
   titulo: string;
   imagen_portada: string;
   cantidad_articulos: number;
@@ -40,7 +41,7 @@ export default function SubastasScreen() {
 
   const fetchCategorias = async () => {
     try {
-      const res = await fetch(`${API_URL}/categorias`, {
+      const res = await fetch(`${API_URL}/api/categorias`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { removeToken(); return; }
@@ -55,8 +56,8 @@ export default function SubastasScreen() {
   const fetchSubastas = async (pag: number, catId: number | null, append: boolean) => {
     if (pag === 1) setCargando(true); else setCargandoMas(true);
     try {
-      let url = `${API_URL}/subastas?pagina=${pag}&limite=10`;
-      if (catId) url += `&categoria_id=${catId}`;
+      let url = `${API_URL}/api/subastas?pagina=${pag}&limite=10`;
+      if (catId) url += `&tematica=${catId}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -119,19 +120,19 @@ export default function SubastasScreen() {
     const esEnVivo = item.estado === 'EN_VIVO';
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.9}
-        onPress={() => {
-          if (!bloqueada) {
-            router.push({
-              pathname: '/catalogo/[id]',
-              params: { id: item.subasta_id, titulo: item.titulo },
-            });
-          }
-        }}
-      >
-        <View style={styles.imagenContainer}>
+      <View style={styles.card}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            if (!bloqueada) {
+              router.push({
+                pathname: '/catalogo/[id]',
+                params: { id: String(item.subasta_id ?? item.id), titulo: item.titulo },
+              });
+            }
+          }}
+          style={styles.imagenContainer}
+        >
           {bloqueada ? (
             <View style={styles.imagenBloqueada}>
               <Ionicons name="lock-closed" size={32} color="#fff" />
@@ -149,11 +150,11 @@ export default function SubastasScreen() {
               <Text style={styles.badgeProximamenteTexto}>PRÓXIMAMENTE</Text>
             </View>
           )}
-        </View>
+        </TouchableOpacity>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitulo} numberOfLines={2}>{item.titulo}</Text>
           <Text style={styles.cardSubtitulo}>
-            {item.cantidad_articulos} artículo{item.cantidad_articulos !== 1 ? 's' : ''} — {item.ubicacion}
+            {item.cantidad_articulos} artículos — {item.ubicacion}
           </Text>
           {bloqueada ? (
             <TouchableOpacity
@@ -167,14 +168,14 @@ export default function SubastasScreen() {
               style={styles.botonCatalogo}
               onPress={() => router.push({
                 pathname: '/catalogo/[id]',
-                params: { id: item.subasta_id, titulo: item.titulo },
+                params: { id: String(item.subasta_id ?? item.id), titulo: item.titulo },
               })}
             >
               <Text style={styles.botonCatalogoTexto}>VER CATÁLOGO</Text>
             </TouchableOpacity>
           )}
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -216,7 +217,9 @@ export default function SubastasScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.headerSpacer} />
+            <TouchableOpacity onPress={() => router.push('/(tabs)')} style={styles.headerSpacer}>
+              <Ionicons name="menu" size={24} color="#000" />
+            </TouchableOpacity>
             <Text style={styles.headerTitulo}>REMATIX</Text>
             <TouchableOpacity onPress={handleToggleBusqueda}>
               <Ionicons name="search" size={22} color="#000" />
@@ -225,6 +228,7 @@ export default function SubastasScreen() {
         )}
       </View>
 
+      <Text style={styles.sectionHeaderTitle}>CATEGORÍAS</Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -235,24 +239,29 @@ export default function SubastasScreen() {
           style={[styles.pildora, !categoriaSeleccionada && styles.pildoraActiva]}
           onPress={() => handleCategoriaPress(null)}
         >
-          <Text style={[styles.pildoraTexto, !categoriaSeleccionada && styles.pildoraTextoActivo]}>TODAS</Text>
+          <Text style={[styles.pildoraTexto, !categoriaSeleccionada && styles.pildoraTextoActivo]}>Todas</Text>
         </TouchableOpacity>
-        {categorias.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[styles.pildora, categoriaSeleccionada === cat.id && styles.pildoraActiva]}
-            onPress={() => handleCategoriaPress(cat.id)}
-          >
-            <Text style={[styles.pildoraTexto, categoriaSeleccionada === cat.id && styles.pildoraTextoActivo]}>
-              {cat.nombre}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {categorias.map((cat: any, index: number) => {
+          const catId = cat?.identificador ?? cat?.id;
+          return (
+            <TouchableOpacity
+              key={String(catId ?? index)}
+              style={[styles.pildora, categoriaSeleccionada === catId && styles.pildoraActiva]}
+              onPress={() => handleCategoriaPress(catId)}
+            >
+              <Text style={[styles.pildoraTexto, categoriaSeleccionada === catId && styles.pildoraTextoActivo]}>
+                {cat?.nombre ?? ''}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
+
+      <Text style={styles.sectionTitle}>SUBASTAS ACTIVAS</Text>
 
       <FlatList
         data={subastas}
-        keyExtractor={item => item.subasta_id}
+        keyExtractor={(item, index) => String(item?.subasta_id ?? item?.id ?? index)}
         renderItem={renderSubastaCard}
         contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
@@ -275,11 +284,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    backgroundColor: '#F8F9FA',
   },
-  headerSpacer: { width: 22 },
+  headerSpacer: { width: 30 },
   headerTitulo: { fontSize: 18, fontWeight: '700', letterSpacing: 4 },
   busquedaContainer: {
     flexDirection: 'row',
@@ -293,27 +300,47 @@ const styles = StyleSheet.create({
     color: '#000',
     paddingVertical: 4,
   },
-  categoriasScroll: { maxHeight: 50, backgroundColor: '#fff' },
-  categoriasContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  sectionHeaderTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#666',
+    letterSpacing: 2,
+    marginLeft: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#666',
+    letterSpacing: 2,
+    marginLeft: 16,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  categoriasScroll: { flexGrow: 0, minHeight: 45, backgroundColor: '#F8F9FA' },
+  categoriasContent: { paddingHorizontal: 16, paddingVertical: 4 },
   pildora: {
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: '#EAEAEA',
+    backgroundColor: '#EEE',
+    marginRight: 10,
   },
   pildoraActiva: { backgroundColor: '#000' },
-  pildoraTexto: { fontSize: 13, fontWeight: '600', color: '#000', letterSpacing: 1 },
-  pildoraTextoActivo: { color: '#fff' },
-  listContent: { padding: 16, paddingTop: 12, gap: 16 },
+  pildoraTexto: { fontSize: 12, fontWeight: 'bold', color: '#555' },
+  pildoraTextoActivo: { color: '#FFF' },
+  listContent: { paddingHorizontal: 16, paddingBottom: 24, gap: 24 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FA',
     borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   imagenContainer: {
-    height: 180,
-    backgroundColor: '#EAEAEA',
+    height: 220,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   imagen: {
     width: '100%',
@@ -321,10 +348,11 @@ const styles = StyleSheet.create({
   },
   imagenBloqueada: {
     flex: 1,
-    backgroundColor: '#555',
+    backgroundColor: '#959595',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
+    borderRadius: 8,
   },
   textoAcceso: {
     color: '#fff',
@@ -352,24 +380,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeProximamenteTexto: { color: '#000', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  cardBody: { padding: 14, gap: 8 },
+  cardBody: { paddingTop: 12, gap: 4 },
   cardTitulo: { fontSize: 18, fontWeight: '700', color: '#000' },
-  cardSubtitulo: { fontSize: 13, color: '#666' },
+  cardSubtitulo: { fontSize: 11, color: '#666', marginBottom: 8 },
   botonCatalogo: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#000',
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderRadius: 20,
+    paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 8,
   },
-  botonCatalogoTexto: { fontSize: 13, fontWeight: '700', color: '#000', letterSpacing: 1 },
+  botonCatalogoTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 2 },
   botonMejorar: {
-    backgroundColor: '#000',
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 20,
+    paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 8,
+    backgroundColor: 'transparent',
   },
-  botonMejorarTexto: { fontSize: 13, fontWeight: '700', color: '#fff', letterSpacing: 1 },
+  botonMejorarTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 2 },
 });
