@@ -94,7 +94,7 @@ const store = {
             ubicacion: 'Buenos Aires',
             rematador: 'Martillero 1',
             fecha_inicio: nowIso,
-            fecha_fin: null,
+            fecha_fin: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
             precio_base_minimo: 10000,
             total_items: 1,
             items: [
@@ -102,11 +102,28 @@ const store = {
                     id: 'i101',
                     numero_pieza: '101',
                     descripcion: 'Cuadro abstracto original',
+                    descripcion_detallada: 'Impresionante obra de arte abstracto contemporáneo que explora la relación entre el color y la emoción. Realizada con técnica mixta sobre lienzo de alta calidad, esta pieza única representa una oportunidad única para coleccionistas exigentes.',
                     precio_base: 10000,
                     ultima_oferta: 15000,
                     duenio_actual_id: 'duenio-1',
+                    duenio_nombre: 'Galería de Arte Moderno',
                     vendido: false,
-                    imagenes: ['img1', 'img2', 'img3', 'img4', 'img5', 'img6']
+                    ficha_tecnica: {
+                        'Técnica': 'Óleo y acrílico sobre lienzo',
+                        'Dimensiones': '120 × 80 cm',
+                        'Año': '2023',
+                        'Procedencia': 'Colección privada, Buenos Aires',
+                        'Estado de conservación': 'Excelente',
+                        'Certificado': 'Incluye certificado de autenticidad'
+                    },
+                    imagenes: [
+                        'https://picsum.photos/seed/arte1/400/600',
+                        'https://picsum.photos/seed/arte2/400/600',
+                        'https://picsum.photos/seed/arte3/400/600',
+                        'https://picsum.photos/seed/arte4/400/600',
+                        'https://picsum.photos/seed/arte5/400/600',
+                        'https://picsum.photos/seed/arte6/400/600'
+                    ]
                 }
             ]
         },
@@ -130,11 +147,24 @@ const store = {
                     id: 'i202',
                     numero_pieza: '202',
                     descripcion: 'Juego de Té 18 piezas',
+                    descripcion_detallada: 'Exquisito juego de té de porcelana fina compuesto por 18 piezas: tetera, 6 tazas, 6 platillos, azucarero y lechera. Decorado a mano con motivos florales tradicionales.',
                     precio_base: 5000,
                     ultima_oferta: 0,
                     duenio_actual_id: 'duenio-2',
+                    duenio_nombre: 'Colección Fernández',
                     vendido: false,
-                    imagenes: ['img1', 'img2', 'img3', 'img4', 'img5', 'img6']
+                    ficha_tecnica: {
+                        'Material': 'Porcelana fina',
+                        'Origen': 'Limoges, Francia',
+                        'Época': 'Principios S.XX',
+                        'Estado': 'Perfecto, sin restauraciones',
+                        'Peso total': '2.8 kg'
+                    },
+                    imagenes: [
+                        'https://picsum.photos/seed/te1/400/600',
+                        'https://picsum.photos/seed/te2/400/600',
+                        'https://picsum.photos/seed/te3/400/600'
+                    ]
                 }
             ]
         },

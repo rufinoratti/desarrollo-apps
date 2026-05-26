@@ -89,13 +89,17 @@ const obtenerEstadoPujasItemLocal = ({ itemId }) => {
     const ofertaActual = getOfertaActualFromList(bids, item.precio_base);
     const { historial, totalParticipantes } = buildLocalHistorial({ itemId });
 
+    const tiempoRestante = subasta.fecha_fin
+        ? Math.max(0, Math.floor((new Date(subasta.fecha_fin).getTime() - Date.now()) / 1000))
+        : null;
+
     return {
         item_id: String(item.id),
         oferta_actual: ofertaActual,
         estado_subasta: mapEstadoSubastaApi(subasta.estado),
-        tiempo_restante_segundos: null,
+        tiempo_restante_segundos: tiempoRestante,
         total_participantes: totalParticipantes,
-        historial_pujas: historial
+        historial_pujas: historial.slice(0, 3)
     };
 };
 
@@ -133,11 +137,20 @@ const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
         throw new AppError('Artículo no encontrado', 404);
     }
 
-    const { data: subasta, error: subastaError } = await supabase
+    let subasta, subastaError;
+    ({ data: subasta, error: subastaError } = await supabase
         .from('subastas')
-        .select('identificador, estado, fecha, hora')
+        .select('identificador, estado, fecha, hora, fecha_cierre')
         .eq('identificador', catalogo.subasta)
-        .maybeSingle();
+        .maybeSingle());
+
+    if (subastaError && /column .*fecha_cierre/i.test(subastaError.message || '')) {
+        ({ data: subasta, error: subastaError } = await supabase
+            .from('subastas')
+            .select('identificador, estado, fecha, hora')
+            .eq('identificador', catalogo.subasta)
+            .maybeSingle());
+    }
 
     if (subastaError) {
         throw new AppError('Error al obtener subasta: ' + subastaError.message, 500);
@@ -179,13 +192,17 @@ const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
         postor: `Postor #${asistentesMap.get(b.asistente)?.numeropostor || 'N/A'}`
     }));
 
+    const tiempoRestante = subasta?.fecha_cierre
+        ? Math.max(0, Math.floor((new Date(subasta.fecha_cierre).getTime() - Date.now()) / 1000))
+        : null;
+
     return {
         item_id: String(item.identificador),
         oferta_actual: ofertaActual,
         estado_subasta: mapEstadoSubastaApi(subasta?.estado),
-        tiempo_restante_segundos: null,
+        tiempo_restante_segundos: tiempoRestante,
         total_participantes: asistentesIds.length,
-        historial_pujas: historial
+        historial_pujas: historial.slice(0, 3)
     };
 };
 
@@ -198,7 +215,14 @@ const obtenerEstadoPujasItem = async ({ itemId }) => {
         return obtenerEstadoPujasItemLocal({ itemId });
     }
 
-    return obtenerEstadoPujasItemSupabase({ itemId });
+    try {
+        return await obtenerEstadoPujasItemSupabase({ itemId });
+    } catch (err) {
+        if (err.statusCode === 404) {
+            return obtenerEstadoPujasItemLocal({ itemId });
+        }
+        throw err;
+    }
 };
 
 const validateMontoRules = ({ montoOfertado, ofertaActual, precioBase, categoriaSubasta }) => {

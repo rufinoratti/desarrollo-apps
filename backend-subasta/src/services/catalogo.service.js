@@ -196,28 +196,43 @@ const obtenerCatalogoPorSubasta = async ({ subastaId, q, orden }) => {
         return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden });
     }
 
-    return obtenerCatalogoPorSubastaSupabase({ subastaId, q, orden });
+    try {
+        return await obtenerCatalogoPorSubastaSupabase({ subastaId, q, orden });
+    } catch (err) {
+        if (err.statusCode === 404) {
+            return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden });
+        }
+        throw err;
+    }
 };
 
 const obtenerDetalleItemLocal = ({ itemId }) => {
     for (const subasta of store.subastas || []) {
         const item = (subasta.items || []).find((it) => String(it.id) === String(itemId));
         if (item) {
+            const tiempoRestante = subasta.fecha_fin
+                ? Math.max(0, Math.floor((new Date(subasta.fecha_fin).getTime() - Date.now()) / 1000))
+                : null;
+
             return {
                 id: item.id,
                 numero_pieza: item.numero_pieza,
                 descripcion: item.descripcion,
-                descripcion_detallada: item.descripcion,
+                descripcion_detallada: item.descripcion_detallada || item.descripcion,
                 precio_base: item.precio_base,
                 ultima_oferta: item.ultima_oferta || 0,
                 estado: item.vendido ? 'VENDIDO' : 'DISPONIBLE',
                 imagenes: item.imagenes || [],
+                ficha_tecnica: item.ficha_tecnica || null,
+                duenio_nombre: item.duenio_nombre || null,
                 historial_propietarios: [],
                 subasta: {
                     id: subasta.id,
                     titulo: subasta.titulo,
-                    estado: subasta.estado
-                }
+                    estado: subasta.estado,
+                    fecha_fin: subasta.fecha_fin || null
+                },
+                tiempo_restante_segundos: tiempoRestante
             };
         }
     }
@@ -245,14 +260,30 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         throw new AppError('Artículo no encontrado', 404);
     }
 
-    const { data: product, error: productError } = await supabase
+    let product, productError;
+    ({ data: product, error: productError } = await supabase
         .from('productos')
         .select('identificador, descripcioncatalogo, descripcioncompleta, duenio')
         .eq('identificador', item.producto)
-        .maybeSingle();
+        .maybeSingle());
 
     if (productError) {
         throw new AppError('Error al obtener producto: ' + productError.message, 500);
+    }
+
+    let duenioNombre = null;
+    if (product?.duenio) {
+        const duenioId = Number(product.duenio);
+        if (!Number.isNaN(duenioId)) {
+            const { data: duenioData, error: duenioError } = await supabase
+                .from('duenios')
+                .select('nombre')
+                .eq('identificador', duenioId)
+                .maybeSingle();
+            if (!duenioError && duenioData) {
+                duenioNombre = duenioData.nombre || null;
+            }
+        }
     }
 
     const { data: photos, error: photosError } = await supabase
@@ -268,10 +299,54 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         .from('pujos')
         .select('importe')
         .eq('item', item.identificador)
-        // Última oferta = mayor importe (no necesariamente último identificador)
         .order('importe', { ascending: false })
         .limit(1)
         .maybeSingle();
+
+    const { data: catalogo, error: catalogoError } = await supabase
+        .from('catalogos')
+        .select('subasta')
+        .eq('identificador', item.catalogo)
+        .maybeSingle();
+
+    if (catalogoError) {
+        throw new AppError('Error al obtener catálogo: ' + catalogoError.message, 500);
+    }
+
+    let tiempoRestante = null;
+    let subastaInfo = null;
+    if (catalogo?.subasta) {
+        let subasta, subastaError;
+        ({ data: subasta, error: subastaError } = await supabase
+            .from('subastas')
+            .select('identificador, estado, fecha_cierre')
+            .eq('identificador', catalogo.subasta)
+            .maybeSingle());
+
+        if (subastaError && /column .*fecha_cierre/i.test(subastaError.message || '')) {
+            ({ data: subasta } = await supabase
+                .from('subastas')
+                .select('identificador, estado')
+                .eq('identificador', catalogo.subasta)
+                .maybeSingle());
+        } else if (subastaError) {
+            throw new AppError('Error al obtener subasta: ' + subastaError.message, 500);
+        }
+
+        if (subasta) {
+            subastaInfo = {
+                id: String(subasta.identificador),
+                estado: subasta.estado,
+                fecha_cierre: (subasta).fecha_cierre || null
+            };
+
+            if ((subasta).fecha_cierre) {
+                tiempoRestante = Math.max(0, Math.floor(
+                    (new Date((subasta).fecha_cierre).getTime() - Date.now()) / 1000
+                ));
+            }
+        }
+    }
 
     return {
         id: String(item.identificador),
@@ -282,7 +357,11 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         ultima_oferta: Number(bidRow?.importe || 0),
         estado: item.subastado === 'si' ? 'VENDIDO' : 'DISPONIBLE',
         imagenes: (photos || []).map((ph) => ph.foto_url),
-        historial_propietarios: product?.duenio ? [String(product.duenio)] : []
+        ficha_tecnica: null,
+        duenio_nombre: duenioNombre,
+        historial_propietarios: product?.duenio ? [String(product.duenio)] : [],
+        subasta: subastaInfo,
+        tiempo_restante_segundos: tiempoRestante
     };
 };
 
@@ -295,7 +374,14 @@ const obtenerDetalleItem = async ({ itemId }) => {
         return obtenerDetalleItemLocal({ itemId });
     }
 
-    return obtenerDetalleItemSupabase({ itemId });
+    try {
+        return await obtenerDetalleItemSupabase({ itemId });
+    } catch (err) {
+        if (err.statusCode === 404) {
+            return obtenerDetalleItemLocal({ itemId });
+        }
+        throw err;
+    }
 };
 
 module.exports = {

@@ -122,7 +122,7 @@ export default function CatalogoScreen() {
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
-          // Futuro: navegar a detalle del artículo
+          router.push({ pathname: '/producto/[id]', params: { id: item.id } });
         }}
         style={styles.imageContainer}
       >
@@ -158,7 +158,7 @@ export default function CatalogoScreen() {
             <Text style={styles.ofertaLabel}>OFERTA ACTUAL</Text>
             <Text style={styles.ofertaMonto}>{formatearPrecio(item.precio_base)}</Text>
           </View>
-          <TouchableOpacity style={styles.pujarBtn}>
+          <TouchableOpacity style={styles.pujarBtn} onPress={() => router.push({ pathname: '/producto/[id]', params: { id: item.id } })}>
             <Text style={styles.pujarBtnTexto}>PUJAR</Text>
           </TouchableOpacity>
         </View>
