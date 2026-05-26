@@ -60,12 +60,18 @@ export default function Login() {
       const data = await response.json();
 
       if (response.status === 200) {
-        saveToken(data.token, data.nombre || 'Usuario', data.categoria);
+        saveToken(data.token, data.nombre || 'Usuario', data.categoria, { email });
         router.replace('/(tabs)');
       } else if (response.status === 401) {
         Alert.alert('Error', 'Email o contraseña incorrectos');
       } else if (response.status === 403) {
-        Alert.alert('Aviso', data.error || 'Cuenta bloqueada o en revisión.');
+        if (data?.codigo === 'USUARIO_EN_REVISION') {
+          await saveToken(null, data.nombre || email || 'Usuario', undefined, { pending: true, email });
+          Alert.alert('Aviso', data.error || 'Usuario en validación.');
+          router.replace('/(tabs)/perfil');
+        } else {
+          Alert.alert('Aviso', data.error || 'Cuenta bloqueada o en revisión.');
+        }
       } else {
         Alert.alert('Error', 'Ocurrió un error inesperado');
       }

@@ -111,9 +111,15 @@ export default function Paso4Pago() {
         const data = await response.json();
 
         if (response.status === 201) {
-          saveToken(data.token, titular || 'Usuario', data.categoria);
+          if (data?.token) {
+            saveToken(data.token, titular || 'Usuario', data.categoria, { email: registrationData?.paso1?.email });
+            router.replace('/(tabs)');
+          } else {
+            await saveToken(null, titular || 'Usuario', undefined, { pending: true, email: registrationData?.paso1?.email });
+            Alert.alert('Usuario en validación', 'Te avisaremos cuando la cuenta sea aprobada.');
+            router.replace('/(tabs)/perfil');
+          }
           clearRegistrationData();
-          router.replace('/(tabs)');
         } else {
           Alert.alert('Error', data.error || 'Ocurrió un error');
         }

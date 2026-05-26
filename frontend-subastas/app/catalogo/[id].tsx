@@ -7,14 +7,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
 
 interface ArticuloItem {
-  item_id: string;
+  id: string;
   numero_lote: string;
   titulo: string;
+  precio_base: number;
   imagen_principal: string;
   estado: string;
-  tiempo_restante: string;
-  oferta_actual: number;
-  es_favorito: boolean;
 }
 
 interface CatalogoSubastaInfo {
@@ -53,7 +51,7 @@ export default function CatalogoScreen() {
   const fetchCatalogo = useCallback(async (q?: string, ord?: string) => {
     setCargando(true);
     try {
-      let url = `${API_URL}/subastas/${id}/catalogo?orden=${ord || ordenSeleccionado}`;
+      let url = `${API_URL}/api/subastas/${id}/catalogo?orden=${ord || ordenSeleccionado}`;
       if (q) url += `&q=${encodeURIComponent(q)}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -98,44 +96,74 @@ export default function CatalogoScreen() {
   };
 
   const formatearPrecio = (monto: number) => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
+    return `$ ${new Intl.NumberFormat('es-AR', {
       maximumFractionDigits: 0,
-    }).format(monto);
+    }).format(monto)}`;
+  };
+
+  const calcularTiempoRestante = (fechaFin: string | undefined) => {
+    if (!fechaFin) return '00h 00m';
+    
+    // Si no hay fecha en el backend para artículos, ponemos un mock para mostrar algo dinámico
+    const ahora = new Date().getTime();
+    const fin = new Date(ahora + 12 * 60 * 60 * 1000 + 15 * 60 * 1000).getTime(); // Mock +12h 15m
+    
+    const diferencia = fin - ahora;
+    if (diferencia <= 0) return '00h 00m';
+
+    const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
+
+    return `${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
   };
 
   const renderArticulo = ({ item }: { item: ArticuloItem }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.9}
-      onPress={() => {
-        // Futuro: navegar a detalle del artículo
-      }}
-    >
-      <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="cover" />
-      <TouchableOpacity style={styles.favoritoBtn} onPress={() => {}}>
-        <Ionicons
-          name={item.es_favorito ? 'heart' : 'heart-outline'}
-          size={20}
-          color={item.es_favorito ? '#D32F2F' : '#fff'}
-        />
+    <View style={styles.card}>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          // Futuro: navegar a detalle del artículo
+        }}
+        style={styles.imageContainer}
+      >
+        <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="contain" />
+        
+        {item.estado === 'DISPONIBLE' && (
+          <View style={styles.badgeEnVivo}>
+            <Text style={styles.badgeEnVivoTexto}>EN VIVO</Text>
+          </View>
+        )}
+
+        <View style={styles.badgeRestan}>
+          <Text style={styles.badgeRestanLabel}>RESTAN</Text>
+          <Text style={styles.badgeRestanTexto}>{calcularTiempoRestante(undefined)}</Text>
+        </View>
       </TouchableOpacity>
+
       <View style={styles.cardBody}>
-        <Text style={styles.loteNumero}>{item.numero_lote}</Text>
-        <Text style={styles.cardTitulo} numberOfLines={2}>{item.titulo}</Text>
-        <View style={styles.cardFooter}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.cardTitleContainer}>
+            <Text style={styles.loteNumero}>LOTE {String(item.numero_lote).padStart(3, '0')}</Text>
+            <Text style={styles.cardTitulo} numberOfLines={1}>{item.titulo}</Text>
+          </View>
+          <TouchableOpacity style={styles.favoritoBtn}>
+            <Ionicons name="heart-outline" size={22} color="#666" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.cardFooterRow}>
           <View>
             <Text style={styles.ofertaLabel}>OFERTA ACTUAL</Text>
-            <Text style={styles.ofertaMonto}>{formatearPrecio(item.oferta_actual)}</Text>
+            <Text style={styles.ofertaMonto}>{formatearPrecio(item.precio_base)}</Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.tiempoLabel}>⏱ {item.tiempo_restante}</Text>
-            <Text style={styles.estadoTexto}>{item.estado}</Text>
-          </View>
+          <TouchableOpacity style={styles.pujarBtn}>
+            <Text style={styles.pujarBtnTexto}>PUJAR</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   if (cargando && articulos.length === 0) {
@@ -178,28 +206,11 @@ export default function CatalogoScreen() {
         </View>
       )}
 
-      <Text style={styles.subastaTitulo}>{subastaInfo?.titulo || titulo || 'Catálogo'}</Text>
-
-      <View style={styles.subheader}>
-        <Text style={styles.totalArticulos}>
-          {articulos.length} artículo{articulos.length !== 1 ? 's' : ''}
-        </Text>
-        <TouchableOpacity
-          style={styles.ordenBtn}
-          onPress={() => setModalOrdenVisible(true)}
-        >
-          <Ionicons name="funnel-outline" size={16} color="#000" />
-          <Text style={styles.ordenTexto}>{ordenes.find(o => o.key === ordenSeleccionado)?.label}</Text>
-        </TouchableOpacity>
-      </View>
-
       <FlatList
         data={articulos}
-        keyExtractor={item => item.item_id}
+        keyExtractor={item => item.id}
         renderItem={renderArticulo}
         contentContainerStyle={styles.listContent}
-        numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
         showsVerticalScrollIndicator={false}
       />
 
@@ -273,52 +284,78 @@ const styles = StyleSheet.create({
     color: '#000',
     paddingVertical: 4,
   },
-  subastaTitulo: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    textAlign: 'center',
-    paddingVertical: 8,
+  listContent: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 24 },
+  card: {
+    width: '100%',
     backgroundColor: '#F8F9FA',
   },
-  subheader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  totalArticulos: { fontSize: 13, color: '#666' },
-  ordenBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  ordenTexto: { fontSize: 13, fontWeight: '600', color: '#000' },
-  listContent: { padding: 16, gap: 16 },
-  card: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  imageContainer: {
+    width: '100%',
+    height: 220,
+    backgroundColor: '#EAEAEA',
+    borderRadius: 8,
     overflow: 'hidden',
-    maxWidth: '48%',
+    marginBottom: 12,
   },
-  cardImagen: { width: '100%', height: 160, backgroundColor: '#EAEAEA' },
-  favoritoBtn: {
+  cardImagen: { width: '100%', height: '100%' },
+  badgeEnVivo: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    padding: 6,
+    top: 12,
+    left: 12,
+    backgroundColor: '#000',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 2,
   },
-  cardBody: { padding: 12, gap: 6 },
-  loteNumero: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1 },
-  cardTitulo: { fontSize: 14, fontWeight: '700', color: '#000' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 },
-  ofertaLabel: { fontSize: 10, color: '#999', letterSpacing: 1 },
-  ofertaMonto: { fontSize: 15, fontWeight: '700', color: '#000' },
-  tiempoLabel: { fontSize: 12, color: '#666' },
-  estadoTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 1 },
+  badgeEnVivoTexto: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  badgeRestan: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: 'rgba(230, 230, 230, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopLeftRadius: 8,
+    minWidth: 90,
+  },
+  badgeRestanLabel: {
+    fontSize: 9,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 2,
+    letterSpacing: 1,
+  },
+  badgeRestanTexto: {
+    fontSize: 14,
+    color: '#000',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  cardBody: { paddingHorizontal: 4 },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  cardTitleContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  loteNumero: { fontSize: 10, fontWeight: '600', color: '#999', letterSpacing: 1, marginBottom: 4 },
+  cardTitulo: { fontSize: 16, fontWeight: '700', color: '#000' },
+  favoritoBtn: { padding: 4 },
+  divider: { height: 1, backgroundColor: '#EEEEEE', marginBottom: 16 },
+  cardFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  ofertaLabel: { fontSize: 10, color: '#999', fontWeight: '600', letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' },
+  ofertaMonto: { fontSize: 18, fontWeight: '700', color: '#000' },
+  pujarBtn: { backgroundColor: '#000', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 16 },
+  pujarBtnTexto: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

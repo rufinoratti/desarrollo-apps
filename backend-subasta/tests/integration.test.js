@@ -467,7 +467,7 @@ test('POST /api/auth/registro/paso4-pago — completa registro y crea usuario', 
 
     assert.equal(paso4.statusCode, 201);
     assert.ok(paso4.body.usuario_id);
-    assert.ok(paso4.body.token);
+    assert.equal(paso4.body.estado_validacion, 'EN_REVISION');
     assert.ok(paso4.body.mensaje);
 });
 
