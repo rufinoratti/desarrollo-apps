@@ -141,7 +141,10 @@ const obtenerPerfil = async (authUser) => {
             return tipo === 'cuenta_bancaria' || tipo === 'cuenta bancaria';
         }) || null;
 
+        const esDuenio = (store.duenios || []).some((d) => String(d.identificador) === String(user.id));
+
         return {
+            es_duenio: esDuenio,
             usuario_id: String(user.id),
             nombre_completo: user.nombre_completo || user.nombre || null,
             categoria: String(user.categoria || 'comun').toUpperCase(),
@@ -175,7 +178,14 @@ const obtenerPerfil = async (authUser) => {
         throw new AppError('Error al obtener cuenta de cobro: ' + cuentaError.message, 500);
     }
 
+    const { data: duenioRow } = await supabase
+        .from('duenios')
+        .select('identificador')
+        .eq('identificador', clienteId)
+        .maybeSingle();
+
     return {
+        es_duenio: !!duenioRow,
         usuario_id: String(persona?.identificador || clienteId),
         nombre_completo: persona?.nombre || null,
         categoria: String(cliente?.categoria || 'comun').toUpperCase(),
@@ -455,11 +465,57 @@ const obtenerRestricciones = async (authUser) => {
     return obtenerRestriccionesSupabase(authUser);
 };
 
+const registrarComoDuenio = async (authUser) => {
+    const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { data: cliente, error: clienteError } = await supabase
+        .from('clientes')
+        .select('admitido, numeropais')
+        .eq('identificador', clienteId)
+        .maybeSingle();
+
+    if (clienteError) {
+        throw new AppError('Error al verificar estado del usuario: ' + clienteError.message, 500);
+    }
+
+    if (!cliente || String(cliente.admitido || '').toLowerCase() === 'no') {
+        const err = new AppError('Usuarios rechazados no pueden registrarse como dueños', 403);
+        err.codigo = 'USUARIO_RECHAZADO';
+        throw err;
+    }
+
+    const { data: existing } = await supabase
+        .from('duenios')
+        .select('identificador')
+        .eq('identificador', clienteId)
+        .maybeSingle();
+
+    if (existing) {
+        return { es_duenio: true, ya_existia: true };
+    }
+
+    const { error: insertError } = await supabase
+        .from('duenios')
+        .insert({
+            identificador: clienteId,
+            numeropais: cliente.numeropais || null,
+            verificacionfinanciera: 'si',
+            verificacionjudicial: 'si'
+        });
+
+    if (insertError) {
+        throw new AppError('Error al registrarte como dueño: ' + insertError.message, 500);
+    }
+
+    return { es_duenio: true, ya_existia: false };
+};
+
 module.exports = {
     obtenerPerfil,
     actualizarPerfil,
     subirFotoPerfil,
     eliminarFotoPerfil,
     obtenerEstadisticas,
-    obtenerRestricciones
+    obtenerRestricciones,
+    registrarComoDuenio
 };

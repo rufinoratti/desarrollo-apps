@@ -65,6 +65,8 @@ const store = {
      * Catálogo de categorías de artículos para subastas.
      * Módulo 2: Home y Exploración.
      */
+    duenios: [],
+
     categorias: [
         { id: 1, nombre: 'Arte y Pintura',  activa: true },
         { id: 2, nombre: 'Vehículos Clásicos', activa: true },

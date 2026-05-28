@@ -39,6 +39,7 @@ interface PerfilData {
     cbu_alias: string;
     banco: string;
   } | null;
+  es_duenio: boolean;
 }
 
 interface RestriccionesData {
@@ -65,6 +66,7 @@ export default function Perfil() {
   const [saving, setSaving] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [registrandoDuenio, setRegistrandoDuenio] = useState(false);
 
   const fetchPerfil = useCallback(async () => {
     if (!token) return;
@@ -99,6 +101,7 @@ export default function Perfil() {
               banco: raw.cuenta_cobro.entidad_bancaria ?? '',
             }
           : null,
+        es_duenio: raw.es_duenio ?? false,
       };
       setPerfil(perfilData);
       setRestricciones(restData);
@@ -173,6 +176,7 @@ export default function Perfil() {
         cuenta_cobro: data.cuenta_cobro
           ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
           : perfil.cuenta_cobro,
+        es_duenio: data.es_duenio ?? perfil.es_duenio,
       };
       setPerfil(updatedPerfil);
       if (editNombre !== nombre) {
@@ -266,6 +270,7 @@ export default function Perfil() {
         cuenta_cobro: data.cuenta_cobro
           ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
           : perfil?.cuenta_cobro ?? null,
+        es_duenio: data.es_duenio ?? perfil?.es_duenio ?? false,
       };
       setPerfil(updatedPerfil);
     } catch {
@@ -311,6 +316,7 @@ export default function Perfil() {
         cuenta_cobro: data.cuenta_cobro
           ? { cbu_alias: data.cuenta_cobro.numero_cbu ?? '', banco: data.cuenta_cobro.entidad_bancaria ?? '' }
           : perfil?.cuenta_cobro ?? null,
+        es_duenio: data.es_duenio ?? perfil?.es_duenio ?? false,
       };
       setPerfil(updatedPerfil);
     } catch {
@@ -350,6 +356,47 @@ export default function Perfil() {
         },
       },
     ]);
+  };
+
+  const handleRegistrarComoDuenio = () => {
+    Alert.alert(
+      'Registrarme como dueño',
+      'Al registrarte como dueño podrás publicar artículos para ser subastados. ¿Deseas continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'REGISTRARME',
+          onPress: async () => {
+            if (!token) return;
+            setRegistrandoDuenio(true);
+            try {
+              const res = await fetch(`${API_URL}/api/perfil/duenio`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.status === 401) {
+                await removeToken();
+                return;
+              }
+              const data = await res.json();
+              if (!res.ok) {
+                throw new Error(data.error || 'Error al registrarte');
+              }
+              if (data.ya_existia) {
+                Alert.alert('Ya sos dueño', 'Ya estás registrado como dueño en el sistema.');
+              } else {
+                setPerfil((prev) => prev ? { ...prev, es_duenio: true } : prev);
+                Alert.alert('¡Listo!', 'Ya estás registrado como dueño. Ahora podés publicar artículos.');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'No se pudo completar el registro');
+            } finally {
+              setRegistrandoDuenio(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -446,6 +493,11 @@ export default function Perfil() {
             <Text style={styles.nombre}>{perfil.usuario.nombre_completo}</Text>
           )}
           <Text style={styles.nivel}>CATEGORÍA: {perfil.usuario.nivel}</Text>
+          <TouchableOpacity onPress={!perfil.es_duenio ? handleRegistrarComoDuenio : undefined} activeOpacity={!perfil.es_duenio ? 0.6 : 1}>
+            <Text style={[styles.duenioStatus, perfil.es_duenio ? styles.duenioSi : styles.duenioNo]}>
+              Dueño: {perfil.es_duenio ? '✓' : '✗'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {pending && !token && (
@@ -572,6 +624,11 @@ export default function Perfil() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity style={styles.duenioButton} onPress={handleRegistrarComoDuenio} disabled={registrandoDuenio}>
+            <Ionicons name={registrandoDuenio ? 'hourglass-outline' : 'shield-checkmark-outline'} size={20} color="#2E7D32" />
+            <Text style={styles.duenioButtonText}>{registrandoDuenio ? 'REGISTRANDO...' : 'REGISTRARME COMO DUEÑO'}</Text>
+          </TouchableOpacity>
+
         {/* Cambiar Contraseña */}
         <TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/(auth)/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
           <Ionicons name="lock-closed-outline" size={20} color="#000" />
@@ -680,6 +737,17 @@ const styles = StyleSheet.create({
     color: '#666',
     letterSpacing: 2,
   },
+  duenioStatus: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  duenioSi: {
+    color: '#2E7D32',
+  },
+  duenioNo: {
+    color: '#D32F2F',
+  },
   section: {
     backgroundColor: '#FFF',
     borderRadius: 12,
@@ -773,6 +841,13 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 6,
   },
+  duenioTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: '#2E7D32',
+    marginBottom: 6,
+  },
   adminSubtitle: {
     fontSize: 13,
     color: '#666',
@@ -854,6 +929,19 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 9,
     fontWeight: '700',
+  },
+  duenioButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  duenioButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2E7D32',
+    letterSpacing: 2,
   },
   cambiarClaveButton: {
     flexDirection: 'row',
