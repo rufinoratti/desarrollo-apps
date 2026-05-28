@@ -25,6 +25,8 @@ export default function RootLayout() {
             <Stack.Screen name="admin" options={{ headerShown: false }} />
             <Stack.Screen name="catalogo/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="producto/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="mis-bienes" options={{ headerShown: false }} />
+            <Stack.Screen name="mis-bienes/agregar-producto" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

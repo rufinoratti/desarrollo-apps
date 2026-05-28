@@ -618,7 +618,7 @@ export default function Perfil() {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#888" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('/(tabs)/billetera')}>
+          <TouchableOpacity style={styles.menuItemLast} onPress={() => router.push('/mis-bienes')}>
             <Text style={styles.menuItemText}>Mis Bienes</Text>
             <Ionicons name="chevron-forward" size={20} color="#888" />
           </TouchableOpacity>

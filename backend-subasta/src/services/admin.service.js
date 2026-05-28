@@ -106,6 +106,7 @@ const evaluarProducto = async ({ id, payload }) => {
         throw err;
     }
 
+
     if (isConfigured) {
         const { data, error } = await supabase
             .from('productos')
@@ -148,15 +149,15 @@ const evaluarProducto = async ({ id, payload }) => {
     producto.descripcioncatalogo = descripcioncatalogo;
     producto.seguro = seguro;
 
-    return {
-        mensaje: 'Estado del producto actualizado',
-        producto_id: String(producto.id),
-        disponible: producto.disponible,
-        revisor: producto.revisor,
-        descripcioncatalogo: producto.descripcioncatalogo,
-        seguro: producto.seguro
+        return {
+            mensaje: 'Estado del producto actualizado',
+            producto_id: String(producto.id),
+            disponible: producto.disponible,
+            revisor: producto.revisor,
+            descripcioncatalogo: producto.descripcioncatalogo,
+            seguro: producto.seguro
+        };
     };
-};
 
 const parseFechaHora = (fecha, hora) => {
     if (!fecha || !hora) return null;
@@ -350,34 +351,82 @@ const listarProductosPendientes = async () => {
     if (isConfigured) {
         const { data, error } = await supabase
             .from('productos')
-            .select('identificador, descripcioncatalogo, disponible, revisor, seguro, duenio')
-            .or('disponible.is.null,disponible.eq.no')
+            .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio')
+            .is('disponible', null)
             .order('identificador', { ascending: true });
 
         if (error) {
             throw new AppError('Error al obtener productos: ' + error.message, 500);
         }
 
-        return (data || []).map((producto) => ({
-            producto_id: producto.identificador,
-            descripcioncatalogo: producto.descripcioncatalogo || null,
-            disponible: producto.disponible || 'no',
-            revisor: producto.revisor || null,
-            seguro: producto.seguro || null,
-            duenio: producto.duenio || null
-        }));
+        const productoIds = [...new Set((data || []).map((producto) => producto.identificador).filter(Boolean))];
+        let itemsMap = new Map();
+        let fotosMap = new Map();
+
+        if (productoIds.length) {
+            const { data: items, error: itemsError } = await supabase
+                .from('itemscatalogo')
+                .select('producto, preciobase, comision')
+                .in('producto', productoIds);
+
+            if (itemsError) {
+                throw new AppError('Error al obtener ítems del catálogo: ' + itemsError.message, 500);
+            }
+
+            for (const item of items || []) {
+                if (!itemsMap.has(item.producto)) {
+                    itemsMap.set(item.producto, item);
+                }
+            }
+
+            const { data: fotos, error: fotosError } = await supabase
+                .from('fotos')
+                .select('producto, foto_url')
+                .in('producto', productoIds);
+
+            if (fotosError) {
+                throw new AppError('Error al obtener fotos: ' + fotosError.message, 500);
+            }
+
+            for (const foto of fotos || []) {
+                if (!fotosMap.has(foto.producto)) {
+                    fotosMap.set(foto.producto, []);
+                }
+                fotosMap.get(foto.producto).push(foto.foto_url);
+            }
+        }
+
+        return (data || []).map((producto) => {
+            const item = itemsMap.get(producto.identificador);
+            return {
+                producto_id: producto.identificador,
+                descripcioncatalogo: producto.descripcioncatalogo || null,
+                descripcioncompleta: producto.descripcioncompleta || null,
+                disponible: producto.disponible || 'no',
+                revisor: producto.revisor || null,
+                seguro: producto.seguro || null,
+                duenio: producto.duenio || null,
+                preciobase: item?.preciobase ?? null,
+                comision: item?.comision ?? null,
+                fotos: fotosMap.get(producto.identificador) || []
+            };
+        });
     }
 
     const productos = Array.isArray(store.productos) ? store.productos : [];
     return productos
-        .filter((p) => String(p.disponible || 'no') !== 'si')
+        .filter((p) => p.disponible === null || p.disponible === undefined)
         .map((p) => ({
             producto_id: p.id,
             descripcioncatalogo: p.descripcioncatalogo || p.descripcion || null,
+            descripcioncompleta: p.descripcioncompleta || p.descripcion || null,
             disponible: p.disponible || 'no',
             revisor: p.revisor || null,
             seguro: p.seguro || null,
-            duenio: p.duenio || null
+            duenio: p.duenio || null,
+            preciobase: p.preciobase || p.precio_base || null,
+            comision: p.comision || null,
+            fotos: p.imagenes || []
         }));
 };
 

@@ -128,8 +128,9 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
     if (productIds.length) {
         const { data: products, error: productsError } = await supabase
             .from('productos')
-            .select('identificador, descripcioncatalogo, descripcioncompleta, duenio')
-            .in('identificador', productIds);
+            .select('identificador, descripcioncatalogo, descripcioncompleta, duenio, disponible')
+            .in('identificador', productIds)
+            .eq('disponible', 'si');
 
         if (productsError) {
             throw new AppError('Error al obtener productos: ' + productsError.message, 500);
@@ -156,6 +157,7 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
 
     let articulos = (items || []).map((it) => {
         const product = productsMap.get(it.producto);
+        if (!product) return null;
         const photos = photosMap.get(it.producto) || [];
 
         return {
@@ -167,7 +169,7 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
             estado: it.subastado === 'si' ? 'VENDIDO' : 'DISPONIBLE',
             tiempo_referencia: new Date().toISOString()
         };
-    });
+    }).filter(Boolean);
 
     if (q) {
         const query = normalizeText(q);
@@ -263,12 +265,17 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
     let product, productError;
     ({ data: product, error: productError } = await supabase
         .from('productos')
-        .select('identificador, descripcioncatalogo, descripcioncompleta, duenio')
+        .select('identificador, descripcioncatalogo, descripcioncompleta, duenio, disponible')
         .eq('identificador', item.producto)
+        .eq('disponible', 'si')
         .maybeSingle());
 
     if (productError) {
         throw new AppError('Error al obtener producto: ' + productError.message, 500);
+    }
+
+    if (!product) {
+        throw new AppError('Artículo no encontrado', 404);
     }
 
     let duenioNombre = null;

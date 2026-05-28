@@ -12,6 +12,8 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
 import { API_URL } from '@/src/config/env';
 import { Button } from '@/src/components/Button';
@@ -36,10 +38,14 @@ interface ClientePendiente {
 interface ProductoPendiente {
   producto_id: string | number;
   descripcioncatalogo?: string | null;
+  descripcioncompleta?: string | null;
   disponible?: string | null;
   revisor?: number | null;
   seguro?: string | null;
   duenio?: string | number | null;
+  preciobase?: number | null;
+  comision?: number | null;
+  fotos?: string[];
 }
 
 interface Categoria {
@@ -78,6 +84,8 @@ export default function AdminPanel() {
   const [showHoraPicker, setShowHoraPicker] = useState(false);
   const [imagenUri, setImagenUri] = useState<string | null>(null);
   const [imagenFile, setImagenFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [detalleProducto, setDetalleProducto] = useState<ProductoPendiente | null>(null);
+  const [showDetalleProducto, setShowDetalleProducto] = useState(false);
 
   const formatFecha = (date: Date) => {
     const year = date.getFullYear();
@@ -336,6 +344,7 @@ export default function AdminPanel() {
       return;
     }
 
+
     const producto = productos.find((p) => String(p.producto_id) === String(productoId));
 
     try {
@@ -472,7 +481,14 @@ export default function AdminPanel() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+          <Ionicons name="chevron-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>REMATIX</Text>
+        <View style={styles.headerBack} />
+      </View>
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         contentContainerStyle={styles.content}
@@ -605,28 +621,64 @@ export default function AdminPanel() {
               <Text style={styles.emptyText}>No hay productos pendientes.</Text>
             ) : (
               productos.map((producto) => (
-                <View key={String(producto.producto_id)} style={styles.card}>
-                  <View style={styles.cardHeaderRow}>
-                    <Text style={styles.cardTitle}>Producto #{producto.producto_id}</Text>
-                    <Text style={[styles.badge, styles.badgePending]}>PENDIENTE</Text>
+                <TouchableOpacity
+                  key={String(producto.producto_id)}
+                  style={styles.productCard}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setDetalleProducto(producto);
+                    setShowDetalleProducto(true);
+                  }}
+                >
+                  <View style={styles.productImageWrap}>
+                    {producto.fotos?.[0] ? (
+                      <Image source={{ uri: producto.fotos[0] }} style={styles.productImage} />
+                    ) : (
+                      <View style={styles.productImagePlaceholder}>
+                        <Ionicons name="image-outline" size={22} color="#CBD5F5" />
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.cardText}>Descripción: {producto.descripcioncatalogo || 'Sin descripción'}</Text>
-                  <Text style={styles.cardText}>Disponible: {producto.disponible ?? 'no'}</Text>
-
-                  <View style={styles.actionRow}>
-                    <Button
-                      title="Aprobar"
-                      onPress={() => handleEvaluarProducto(producto.producto_id, 'si')}
-                      style={styles.actionButton}
-                    />
-                    <Button
-                      title="Rechazar"
-                      onPress={() => handleEvaluarProducto(producto.producto_id, 'no')}
-                      variant="secondary"
-                      style={styles.actionButton}
-                    />
+                  <View style={styles.productBody}>
+                    <View style={styles.cardHeaderRow}>
+                      <Text style={styles.cardTitle} numberOfLines={1}>
+                        {producto.descripcioncatalogo || `Producto #${producto.producto_id}`}
+                      </Text>
+                      <Text style={[styles.badge, styles.badgePending]}>PENDIENTE</Text>
+                    </View>
+                    {producto.descripcioncompleta ? (
+                      <Text style={styles.cardText} numberOfLines={2}>
+                        {producto.descripcioncompleta}
+                      </Text>
+                    ) : (
+                      <Text style={styles.cardText}>Sin descripción completa.</Text>
+                    )}
+                    <View style={styles.productMetaRow}>
+                      <Text style={styles.productMetaLabel}>Base</Text>
+                      <Text style={styles.productMetaValue}>
+                        {producto.preciobase ? `$ ${Number(producto.preciobase).toLocaleString('es-AR')}` : 'N/D'}
+                      </Text>
+                      <Text style={styles.productMetaSeparator}>•</Text>
+                      <Text style={styles.productMetaLabel}>Comisión</Text>
+                      <Text style={styles.productMetaValue}>
+                        {producto.comision ? `$ ${Number(producto.comision).toLocaleString('es-AR')}` : 'N/D'}
+                      </Text>
+                    </View>
+                    <View style={styles.actionRow}>
+                      <Button
+                        title="Aprobar"
+                        onPress={() => handleEvaluarProducto(producto.producto_id, 'si')}
+                        style={styles.actionButton}
+                      />
+                      <Button
+                        title="Rechazar"
+                        onPress={() => handleEvaluarProducto(producto.producto_id, 'no')}
+                        variant="secondary"
+                        style={styles.actionButton}
+                      />
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </View>
@@ -761,6 +813,61 @@ export default function AdminPanel() {
             </Modal>
           </View>
         )}
+        <Modal visible={showDetalleProducto} transparent animationType="slide" onRequestClose={() => setShowDetalleProducto(false)}>
+          <View style={styles.detailOverlay}>
+            <View style={styles.detailCard}>
+              <View style={styles.detailHeader}>
+                <Text style={styles.detailTitle}>Detalle del producto</Text>
+                <TouchableOpacity onPress={() => setShowDetalleProducto(false)}>
+                  <Ionicons name="close" size={20} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.detailGallery}>
+                  {(detalleProducto?.fotos || []).length > 0 ? (
+                    detalleProducto?.fotos?.map((foto, index) => (
+                      <Image key={`${foto}-${index}`} source={{ uri: foto }} style={styles.detailImage} />
+                    ))
+                  ) : (
+                    <View style={styles.detailImagePlaceholder}>
+                      <Ionicons name="image-outline" size={32} color="#CBD5F5" />
+                    </View>
+                  )}
+                </ScrollView>
+                <Text style={styles.detailName}>
+                  {detalleProducto?.descripcioncatalogo || `Producto #${detalleProducto?.producto_id}`}
+                </Text>
+                {detalleProducto?.descripcioncompleta ? (
+                  <Text style={styles.detailDescription}>{detalleProducto.descripcioncompleta}</Text>
+                ) : (
+                  <Text style={styles.detailDescription}>Sin descripción completa.</Text>
+                )}
+                <View style={styles.detailMetaGrid}>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaLabel}>Precio base</Text>
+                    <Text style={styles.detailMetaValue}>
+                      {detalleProducto?.preciobase ? `$ ${Number(detalleProducto.preciobase).toLocaleString('es-AR')}` : 'N/D'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaLabel}>Comisión</Text>
+                    <Text style={styles.detailMetaValue}>
+                      {detalleProducto?.comision ? `$ ${Number(detalleProducto.comision).toLocaleString('es-AR')}` : 'N/D'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaLabel}>Seguro</Text>
+                    <Text style={styles.detailMetaValue}>{detalleProducto?.seguro || 'Sin seguro'}</Text>
+                  </View>
+                  <View style={styles.detailMetaItem}>
+                    <Text style={styles.detailMetaLabel}>Dueño</Text>
+                    <Text style={styles.detailMetaValue}>{detalleProducto?.duenio || 'N/D'}</Text>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -768,6 +875,21 @@ export default function AdminPanel() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerBack: { width: 40 },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 3,
+    color: '#000',
+  },
   content: { padding: 16, paddingBottom: 80 },
   title: { fontSize: 22, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
   subtitle: { fontSize: 13, color: '#64748B', marginBottom: 20 },
@@ -775,24 +897,21 @@ const styles = StyleSheet.create({
 
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 3,
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 4,
+    marginBottom: 22,
   },
   tabItem: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 8,
   },
   tabItemActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    backgroundColor: '#0F172A',
   },
   tabItemText: {
     fontSize: 12,
@@ -801,7 +920,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   tabItemTextActive: {
-    color: '#6366F1',
+    color: '#FFFFFF',
   },
 
   section: { marginBottom: 24 },
@@ -881,6 +1000,28 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  productCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  productImageWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productImage: { width: '100%', height: '100%' },
+  productImagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  productBody: { flex: 1 },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -904,6 +1045,29 @@ const styles = StyleSheet.create({
   badgeRejected: {
     backgroundColor: '#FEE2E2',
     color: '#991B1B',
+  },
+
+  productMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  productMetaLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  productMetaValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  productMetaSeparator: {
+    color: '#CBD5F5',
   },
 
   emptyText: { color: '#94A3B8', fontSize: 13, textAlign: 'center', marginVertical: 20 },
@@ -934,5 +1098,85 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6366F1',
     fontWeight: '500',
+  },
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    maxHeight: '85%',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  detailTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  detailGallery: {
+    marginBottom: 12,
+  },
+  detailImage: {
+    width: 220,
+    height: 160,
+    borderRadius: 12,
+    marginRight: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  detailImagePlaceholder: {
+    width: 220,
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  detailDescription: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  detailMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  detailMetaItem: {
+    width: '47%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  detailMetaLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  detailMetaValue: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
   },
 });
