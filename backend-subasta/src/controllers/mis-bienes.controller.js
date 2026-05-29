@@ -42,6 +42,16 @@ const crearProducto = async (req, res, next) => {
     }
 };
 
+const listarCatalogos = async (req, res, next) => {
+    try {
+        const { subasta } = req.query;
+        const result = await misBienesService.listarCatalogosPorSubasta({ authUser: req.user, subastaId: subasta });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 const retirarProducto = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -58,6 +68,7 @@ const retirarProducto = async (req, res, next) => {
 module.exports = {
     obtenerOpciones,
     obtenerSubastas,
+    listarCatalogos,
     listarMisBienes,
     crearProducto,
     retirarProducto

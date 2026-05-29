@@ -37,6 +37,9 @@ router.get('/mis-bienes/opciones', authMiddleware, misBienesController.obtenerOp
 // Subastas disponibles según temática
 router.get('/mis-bienes/subastas', authMiddleware, misBienesController.obtenerSubastas);
 
+// Catálogos disponibles de una subasta
+router.get('/mis-bienes/catalogos', authMiddleware, misBienesController.listarCatalogos);
+
 // Listado de productos del dueño
 router.get('/mis-bienes', authMiddleware, misBienesController.listarMisBienes);
 

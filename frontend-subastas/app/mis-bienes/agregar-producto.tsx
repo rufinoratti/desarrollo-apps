@@ -20,7 +20,11 @@ interface SubastaItem {
   nombre: string;
   fecha?: string | null;
   hora?: string | null;
-  catalogo_id?: number | null;
+}
+
+interface CatalogoItem {
+  id: number;
+  descripcion: string;
 }
 
 export default function AgregarProductoScreen() {
@@ -46,7 +50,9 @@ export default function AgregarProductoScreen() {
   const [categoriaLabel, setCategoriaLabel] = useState('');
   const [subastaId, setSubastaId] = useState<number | null>(null);
   const [subastaLabel, setSubastaLabel] = useState('');
+  const [catalogos, setCatalogos] = useState<{ id: number; descripcion: string }[]>([]);
   const [catalogoId, setCatalogoId] = useState<number | null>(null);
+  const [catalogoLabel, setCatalogoLabel] = useState('');
 
   const [imagenes, setImagenes] = useState<{ uri: string; name: string; type: string }[]>([]);
 
@@ -94,6 +100,24 @@ export default function AgregarProductoScreen() {
     }
   }, [token, removeToken]);
 
+  const fetchCatalogos = useCallback(async (subastaId: number) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/mis-bienes/catalogos?subasta=${subastaId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        await removeToken();
+        return;
+      }
+      if (!res.ok) return;
+      const data = await res.json();
+      setCatalogos(data || []);
+    } catch {
+      // Silencioso
+    }
+  }, [token, removeToken]);
+
   useEffect(() => {
     fetchOpciones();
   }, [fetchOpciones]);
@@ -135,10 +159,10 @@ export default function AgregarProductoScreen() {
       revisorId &&
       categoriaId &&
       subastaId &&
-      (catalogoId || subastas.find((s) => s.id === subastaId)?.catalogo_id) &&
+      catalogoId &&
       imagenes.length > 0
     );
-  }, [nombre, descripcion, precioBase, comision, revisorId, categoriaId, subastaId, catalogoId, subastas, imagenes]);
+  }, [nombre, descripcion, precioBase, comision, revisorId, categoriaId, subastaId, catalogoId, imagenes]);
 
   const handleSubmit = async () => {
     if (!token) return;
@@ -147,9 +171,8 @@ export default function AgregarProductoScreen() {
       return;
     }
 
-    const resolvedCatalogo = catalogoId || subastas.find((s) => s.id === subastaId)?.catalogo_id || null;
-    if (!resolvedCatalogo) {
-      Alert.alert('Falta subasta', 'Seleccioná una subasta válida.');
+    if (!catalogoId) {
+      Alert.alert('Falta catálogo', 'Seleccioná un catálogo para la subasta.');
       return;
     }
 
@@ -163,7 +186,7 @@ export default function AgregarProductoScreen() {
       formData.append('revisor', String(revisorId));
       formData.append('seguro', seguroId ? String(seguroId) : '');
       formData.append('subasta_id', String(subastaId));
-      formData.append('catalogo_id', String(resolvedCatalogo));
+      formData.append('catalogo_id', String(catalogoId));
 
       imagenes.forEach((img) => {
         formData.append('fotos', img as any);
@@ -310,8 +333,21 @@ export default function AgregarProductoScreen() {
             onSelect={(id, label) => {
               setSubastaId(id);
               setSubastaLabel(label);
-              const cat = subastas.find((s) => s.id === id)?.catalogo_id || null;
-              setCatalogoId(cat);
+              setCatalogoId(null);
+              setCatalogoLabel('');
+              setCatalogos([]);
+              fetchCatalogos(id);
+            }}
+          />
+          <Select
+            label="Catálogo"
+            value={catalogoLabel}
+            options={catalogos.map((c) => ({ id: c.id, nombre: c.descripcion }))}
+            placeholder="Seleccionar catálogo"
+            disabled={!subastaId || catalogos.length === 0}
+            onSelect={(id, label) => {
+              setCatalogoId(id);
+              setCatalogoLabel(label);
             }}
           />
         </View>

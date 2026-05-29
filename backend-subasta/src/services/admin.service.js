@@ -467,38 +467,155 @@ const listarClientesRechazados = async () => {
         }));
 };
 
-const obtenerOpcionesAdmin = async () => {
+const listarSubastas = async () => {
     if (!isConfigured) {
-        return { revisores: [] };
+        return (store.subastas || []).map((s) => ({
+            id: s.id,
+            nombre: s.titulo || `Subasta #${s.id}`,
+            fecha: s.fecha_inicio || null,
+            estado: s.estado || null
+        }));
     }
 
-    const { data: revisoresData, error: revisoresError } = await supabase
+    const { data, error } = await supabase
+        .from('subastas')
+        .select('identificador, nombre, fecha, estado, tematica')
+        .order('fecha', { ascending: false });
+
+    if (error) throw new AppError('Error al obtener subastas: ' + error.message, 500);
+
+    return (data || []).map((s) => ({
+        id: s.identificador,
+        nombre: s.nombre || `Subasta #${s.identificador}`,
+        fecha: s.fecha || null,
+        estado: s.estado || null,
+        tematica: s.tematica || null
+    }));
+};
+
+const listarCatalogosPorSubasta = async ({ subastaId }) => {
+    const id = parseIdNumber(subastaId);
+    if (!id) throw new AppError('Subasta inválida', 400);
+
+    if (!isConfigured) {
+        return (store.catalogos || []).filter((c) => Number(c.subasta) === id).map((c) => ({
+            id: c.id,
+            descripcion: c.descripcion,
+            subasta: c.subasta,
+            responsable: c.responsable
+        }));
+    }
+
+    const { data, error } = await supabase
+        .from('catalogos')
+        .select('identificador, descripcion, subasta, responsable')
+        .eq('subasta', id)
+        .order('identificador', { ascending: true });
+
+    if (error) throw new AppError('Error al obtener catálogos: ' + error.message, 500);
+
+    return (data || []).map((c) => ({
+        id: c.identificador,
+        descripcion: c.descripcion,
+        subasta: c.subasta,
+        responsable: c.responsable
+    }));
+};
+
+const crearCatalogo = async ({ payload }) => {
+    const subastaId = parseIdNumber(payload?.subasta_id);
+    const descripcion = String(payload?.descripcion || '').trim();
+    const responsable = parseIdNumber(payload?.responsable);
+
+    if (!subastaId || !descripcion || !responsable) {
+        const err = new AppError('Faltan datos para crear el catálogo', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
+    if (!isConfigured) {
+        const catalogos = store.catalogos || [];
+        const id = nextId('c', 'catalogo');
+        const nuevo = { id, descripcion, subasta: subastaId, responsable };
+        catalogos.push(nuevo);
+        store.catalogos = catalogos;
+        return { id, descripcion, subasta: subastaId, responsable };
+    }
+
+    const { data, error } = await supabase
+        .from('catalogos')
+        .insert({
+            descripcion,
+            subasta: subastaId,
+            responsable
+        })
+        .select('identificador, descripcion, subasta, responsable')
+        .single();
+
+    if (error) throw new AppError('Error al crear catálogo: ' + error.message, 500);
+
+    return {
+        id: data.identificador,
+        descripcion: data.descripcion,
+        subasta: data.subasta,
+        responsable: data.responsable
+    };
+};
+
+const obtenerOpcionesAdmin = async () => {
+    if (!isConfigured) {
+        return { revisores: [], empleados: [] };
+    }
+
+    let revisoresData, empleadosData;
+
+    const revisoresQuery = supabase
         .from('empleados')
         .select('identificador, cargo, nombre')
         .ilike('cargo', '%revisor%');
 
-    if (revisoresError && /column .*nombre/i.test(revisoresError.message || '')) {
-        const { data: fallback, error: fallbackError } = await supabase
+    const empleadosQuery = supabase
+        .from('empleados')
+        .select('identificador, nombre, cargo')
+        .ilike('cargo', '%resp%')
+        .order('nombre', { ascending: true });
+
+    const { data: rData, error: rError } = await revisoresQuery;
+    if (rError && /column .*nombre/i.test(rError.message || '')) {
+        const { data: fallback, error: fbError } = await supabase
             .from('empleados')
             .select('identificador, cargo')
             .ilike('cargo', '%revisor%');
-
-        if (fallbackError) throw new AppError('Error al obtener revisores: ' + fallbackError.message, 500);
-
-        return {
-            revisores: (fallback || []).map((row) => ({
-                id: row.identificador,
-                nombre: row.cargo || `Revisor ${row.identificador}`
-            }))
-        };
+        if (fbError) throw new AppError('Error al obtener revisores: ' + fbError.message, 500);
+        revisoresData = fallback;
+    } else if (rError) {
+        throw new AppError('Error al obtener revisores: ' + rError.message, 500);
+    } else {
+        revisoresData = rData;
     }
 
-    if (revisoresError) throw new AppError('Error al obtener revisores: ' + revisoresError.message, 500);
+    const { data: eData, error: eError } = await empleadosQuery;
+    if (eError && /column .*nombre/i.test(eError.message || '')) {
+        const { data: fallback, error: fbError } = await supabase
+            .from('empleados')
+            .select('identificador, cargo')
+            .ilike('cargo', '%resp%');
+        if (fbError) throw new AppError('Error al obtener empleados: ' + fbError.message, 500);
+        empleadosData = fallback;
+    } else if (eError) {
+        throw new AppError('Error al obtener empleados: ' + eError.message, 500);
+    } else {
+        empleadosData = eData;
+    }
 
     return {
         revisores: (revisoresData || []).map((row) => ({
             id: row.identificador,
             nombre: row.nombre || row.cargo || `Revisor ${row.identificador}`
+        })),
+        empleados: (empleadosData || []).map((row) => ({
+            id: row.identificador,
+            nombre: row.nombre || row.cargo || `Empleado ${row.identificador}`
         }))
     };
 };
@@ -511,5 +628,8 @@ module.exports = {
     listarClientesPendientes,
     listarProductosPendientes,
     listarClientesRechazados,
-    obtenerOpcionesAdmin
+    obtenerOpcionesAdmin,
+    listarSubastas,
+    listarCatalogosPorSubasta,
+    crearCatalogo
 };

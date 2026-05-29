@@ -139,8 +139,7 @@ const obtenerSubastasPorTematica = async ({ tematica }) => {
             id: s.id,
             nombre: s.titulo,
             fecha: s.fecha_inicio || null,
-            hora: null,
-            catalogo_id: null
+            hora: null
         }));
     }
 
@@ -155,29 +154,41 @@ const obtenerSubastasPorTematica = async ({ tematica }) => {
         throw new AppError('Error al obtener subastas: ' + subastasError.message, 500);
     }
 
-    const subastaIds = (subastas || []).map((s) => s.identificador).filter(Boolean);
-    if (!subastaIds.length) return [];
+    return (subastas || []).map((s) => ({
+        id: s.identificador,
+        nombre: s.nombre || `Subasta #${s.identificador}`,
+        fecha: s.fecha || null,
+        hora: s.hora || null
+    }));
+};
 
-    const { data: catalogos, error: catalogosError } = await supabase
-        .from('catalogos')
-        .select('identificador, subasta')
-        .in('subasta', subastaIds);
+const listarCatalogosPorSubasta = async ({ authUser, subastaId }) => {
+    const id = parseNumber(subastaId);
+    if (!id) return [];
 
-    if (catalogosError) {
-        throw new AppError('Error al obtener catálogos: ' + catalogosError.message, 500);
+    if (!isConfigured) {
+        return (store.catalogos || []).filter((c) => Number(c.subasta) === id).map((c) => ({
+            id: c.id,
+            descripcion: c.descripcion || `Catálogo #${c.id}`,
+            subasta: c.subasta
+        }));
     }
 
-    const catalogoMap = new Map((catalogos || []).map((c) => [c.subasta, c.identificador]));
+    const { data, error } = await supabase
+        .from('catalogos')
+        .select('identificador, descripcion, subasta')
+        .eq('subasta', id)
+        .order('identificador', { ascending: true });
 
-    return (subastas || [])
-        .map((s) => ({
-            id: s.identificador,
-            nombre: s.nombre || `Subasta #${s.identificador}`,
-            fecha: s.fecha || null,
-            hora: s.hora || null,
-            catalogo_id: catalogoMap.get(s.identificador) || null
-        }))
-        .filter((s) => Boolean(s.catalogo_id));
+    if (error) {
+        throw new AppError('Error al obtener catálogos: ' + error.message, 500);
+    }
+
+    return (data || []).map((c) => ({
+        id: c.identificador,
+        descripcion: c.descripcion,
+        subasta: c.subasta
+    }));
 };
 
 const listarMisBienes = async (authUser) => {
@@ -498,6 +509,7 @@ const retirarProducto = async ({ authUser, productoId }) => {
 module.exports = {
     obtenerOpciones,
     obtenerSubastasPorTematica,
+    listarCatalogosPorSubasta,
     listarMisBienes,
     crearProducto,
     retirarProducto

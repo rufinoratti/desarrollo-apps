@@ -78,6 +78,34 @@ const obtenerOpciones = async (req, res, next) => {
     }
 };
 
+const listarSubastas = async (req, res, next) => {
+    try {
+        const result = await adminService.listarSubastas();
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const listarCatalogosPorSubasta = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await adminService.listarCatalogosPorSubasta({ subastaId: id });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const crearCatalogo = async (req, res, next) => {
+    try {
+        const result = await adminService.crearCatalogo({ payload: req.body });
+        return res.status(201).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     evaluarCliente,
     evaluarProducto,
@@ -86,5 +114,8 @@ module.exports = {
     listarClientesPendientes,
     listarProductosPendientes,
     listarClientesRechazados,
-    obtenerOpciones
+    obtenerOpciones,
+    listarSubastas,
+    listarCatalogosPorSubasta,
+    crearCatalogo
 };

@@ -245,7 +245,8 @@ const counters = {
     articleReq: 1,
     registroTemp: 1,
     subasta: 5,
-    producto: 1
+    producto: 1,
+    catalogo: 1
 };
 
 /**

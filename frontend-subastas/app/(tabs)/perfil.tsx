@@ -365,7 +365,7 @@ export default function Perfil() {
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'REGISTRARME',
+          text: 'Registrarme',
           onPress: async () => {
             if (!token) return;
             setRegistrandoDuenio(true);

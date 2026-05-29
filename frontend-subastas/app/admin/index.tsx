@@ -116,6 +116,17 @@ export default function AdminPanel() {
   const [detalleProducto, setDetalleProducto] = useState<ProductoPendiente | null>(null);
   const [showDetalleProducto, setShowDetalleProducto] = useState(false);
 
+  const [subastasList, setSubastasList] = useState<any[]>([]);
+  const [subastaCatalogoId, setSubastaCatalogoId] = useState<number | null>(null);
+  const [subastaCatalogoLabel, setSubastaCatalogoLabel] = useState('');
+  const [catalogos, setCatalogos] = useState<any[]>([]);
+  const [nuevoCatalogoDescripcion, setNuevoCatalogoDescripcion] = useState('');
+  const [nuevoCatalogoResponsableId, setNuevoCatalogoResponsableId] = useState<number | null>(null);
+  const [nuevoCatalogoResponsableLabel, setNuevoCatalogoResponsableLabel] = useState('');
+  const [empleados, setEmpleados] = useState<{ id: number; nombre: string }[]>([]);
+  const [guardandoCatalogo, setGuardandoCatalogo] = useState(false);
+  const [loadingCatalogos, setLoadingCatalogos] = useState(false);
+
   const switchTab = (key: typeof tab) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setTab(key);
@@ -291,15 +302,28 @@ export default function AdminPanel() {
     }));
   }, [token, handleUnauthorized]);
 
-  const fetchRevisores = useCallback(async () => {
+  const fetchOpcionesAdmin = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/opciones`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) { handleUnauthorized(); return { revisores: [], empleados: [] }; }
+      if (!res.ok) return { revisores: [], empleados: [] };
+      return await res.json();
+    } catch {
+      return { revisores: [], empleados: [] };
+    }
+  }, [token, handleUnauthorized]);
+
+  const fetchSubastasList = useCallback(async () => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subastas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.status === 401) { handleUnauthorized(); return []; }
       if (!res.ok) return [];
-      const data = await res.json();
-      return data.revisores || [];
+      return (await res.json()) || [];
     } catch {
       return [];
     }
@@ -307,24 +331,27 @@ export default function AdminPanel() {
 
   const cargarDatos = useCallback(async () => {
     try {
-      const [clientesData, clientesRechazadosData, productosData, categoriasData, revisoresData] = await Promise.all([
+      const [clientesData, clientesRechazadosData, productosData, categoriasData, opcionesData, subastasData] = await Promise.all([
         fetchClientes(),
         fetchClientesRechazados(),
         fetchProductos(),
         fetchCategorias(),
-        fetchRevisores(),
+        fetchOpcionesAdmin(),
+        fetchSubastasList(),
       ]);
       setClientes(clientesData);
       setClientesRechazados(clientesRechazadosData);
       setProductos(productosData);
       setCategorias(categoriasData);
-      setRevisores(revisoresData);
+      setRevisores(opcionesData.revisores || []);
+      setEmpleados(opcionesData.empleados || []);
+      setSubastasList(subastasData);
     } catch {
       Alert.alert('Error', 'No se pudieron cargar los datos del panel admin');
     } finally {
       setLoading(false);
     }
-  }, [fetchClientes, fetchClientesRechazados, fetchProductos, fetchCategorias, fetchRevisores]);
+  }, [fetchClientes, fetchClientesRechazados, fetchProductos, fetchCategorias, fetchOpcionesAdmin, fetchSubastasList]);
 
   useEffect(() => {
     if (token) cargarDatos();
@@ -437,6 +464,54 @@ export default function AdminPanel() {
       const message = e instanceof Error ? e.message : 'No se pudo crear la subasta.';
       Alert.alert('Error', message);
     } finally { setGuardandoSubasta(false); }
+  };
+
+  const fetchCatalogosAdmin = useCallback(async (subastaId: number) => {
+    if (!token) return;
+    setLoadingCatalogos(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subastas/${subastaId}/catalogos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { handleUnauthorized(); return; }
+      if (!res.ok) return;
+      const data = await res.json();
+      setCatalogos(data || []);
+    } catch {
+      setCatalogos([]);
+    } finally {
+      setLoadingCatalogos(false);
+    }
+  }, [token, handleUnauthorized]);
+
+  const handleCrearCatalogo = async () => {
+    if (!subastaCatalogoId || !nuevoCatalogoDescripcion.trim() || !nuevoCatalogoResponsableId) {
+      Alert.alert('Faltan datos', 'Completá descripción y responsable del catálogo.');
+      return;
+    }
+    setGuardandoCatalogo(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/catalogos`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subasta_id: subastaCatalogoId,
+          descripcion: nuevoCatalogoDescripcion.trim(),
+          responsable: nuevoCatalogoResponsableId,
+        }),
+      });
+      if (res.status === 401) { handleUnauthorized(); return; }
+      if (!res.ok) { Alert.alert('Error', 'No se pudo crear el catálogo.'); return; }
+      Alert.alert('Listo', 'Catálogo creado exitosamente.');
+      setNuevoCatalogoDescripcion('');
+      setNuevoCatalogoResponsableId(null);
+      setNuevoCatalogoResponsableLabel('');
+      await fetchCatalogosAdmin(subastaCatalogoId);
+    } catch {
+      Alert.alert('Error', 'No se pudo crear el catálogo.');
+    } finally {
+      setGuardandoCatalogo(false);
+    }
   };
 
   if (!token) {
@@ -792,6 +867,83 @@ export default function AdminPanel() {
             </View>
 
             <Button title="Crear subasta" onPress={handleCrearSubasta} loading={guardandoSubasta} style={styles.submitButton} />
+
+            <View style={[styles.section, { marginTop: 28 }]}>
+              <Text style={styles.sectionTitle}>Gestionar catálogos</Text>
+
+              <View style={styles.formGroup}>
+                <View style={styles.formGroupHeader}>
+                  <Ionicons name="book-outline" size={16} color="#6366F1" />
+                  <Text style={styles.formGroupTitle}>Seleccionar subasta</Text>
+                </View>
+                <Select
+                  label="Subasta"
+                  value={subastaCatalogoLabel}
+                  options={subastasList.map((s: any) => ({ id: s.id, nombre: s.nombre }))}
+                  placeholder="Seleccionar subasta"
+                  onSelect={(id, label) => {
+                    setSubastaCatalogoId(id);
+                    setSubastaCatalogoLabel(label);
+                    setCatalogos([]);
+                    setNuevoCatalogoDescripcion('');
+                    setNuevoCatalogoResponsableId(null);
+                    setNuevoCatalogoResponsableLabel('');
+                    fetchCatalogosAdmin(id);
+                  }}
+                />
+              </View>
+
+              {subastaCatalogoId && (
+                <View style={styles.formGroup}>
+                  <View style={styles.formGroupHeader}>
+                    <Ionicons name="list-outline" size={16} color="#6366F1" />
+                    <Text style={styles.formGroupTitle}>Catálogos existentes</Text>
+                  </View>
+                  {loadingCatalogos ? (
+                    <ActivityIndicator size="small" color="#6366F1" style={{ marginVertical: 12 }} />
+                  ) : catalogos.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Ionicons name="book-outline" size={32} color="#CBD5E1" />
+                      <Text style={styles.emptyStateText}>Sin catálogos</Text>
+                    </View>
+                  ) : (
+                    catalogos.map((c: any) => (
+                      <View key={String(c.id)} style={styles.card}>
+                        <View style={styles.cardRow}>
+                          <Ionicons name="bookmark" size={18} color="#6366F1" />
+                          <View style={styles.cardBody}>
+                            <Text style={styles.cardName}>{c.descripcion}</Text>
+                            <Text style={styles.cardInfoText}>ID catálogo: {c.id}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
+
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 14, marginTop: 14 }}>
+                    <Text style={[styles.formGroupTitle, { marginBottom: 12 }]}>Nuevo catálogo</Text>
+                    <Input
+                      label="Descripción"
+                      value={nuevoCatalogoDescripcion}
+                      onChangeText={setNuevoCatalogoDescripcion}
+                      placeholder="Ej: Autos deportivos"
+                    />
+                    <Select
+                      label="Responsable"
+                      value={nuevoCatalogoResponsableLabel}
+                      options={empleados.map((e) => ({ id: e.id, nombre: e.nombre }))}
+                      placeholder="Seleccionar responsable"
+                      onSelect={(id, label) => {
+                        setNuevoCatalogoResponsableId(id);
+                        setNuevoCatalogoResponsableLabel(label);
+                      }}
+                    />
+                    <Button title="Crear catálogo" onPress={handleCrearCatalogo} loading={guardandoCatalogo} />
+                  </View>
+                </View>
+              )}
+            </View>
+
             <Modal visible={showFechaPicker} transparent animationType="slide">
               <View style={styles.pickerModalOverlay}>
                 <View style={styles.pickerModalContent}>
