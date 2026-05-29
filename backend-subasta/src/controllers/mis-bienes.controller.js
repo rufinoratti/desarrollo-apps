@@ -42,9 +42,23 @@ const crearProducto = async (req, res, next) => {
     }
 };
 
+const retirarProducto = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await misBienesService.retirarProducto({
+            authUser: req.user,
+            productoId: id
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     obtenerOpciones,
     obtenerSubastas,
     listarMisBienes,
-    crearProducto
+    crearProducto,
+    retirarProducto
 };

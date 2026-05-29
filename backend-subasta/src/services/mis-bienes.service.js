@@ -190,6 +190,8 @@ const listarMisBienes = async (authUser) => {
                 descripcioncatalogo: p.descripcioncatalogo || p.descripcion || null,
                 descripcioncompleta: p.descripcioncompleta || null,
                 status: mapEstadoProducto(p.disponible),
+                preciobase: p.preciobase || null,
+                comision: p.comision || null,
                 motivorechazo: p.motivorechazo || null,
                 fotos: []
             }))
@@ -211,6 +213,7 @@ const listarMisBienes = async (authUser) => {
 
     const productoIds = (productos || []).map((p) => p.identificador).filter(Boolean);
     let fotosMap = new Map();
+    let itemsMap = new Map();
 
     if (productoIds.length) {
         const { data: fotos, error: fotosError } = await supabase
@@ -228,16 +231,37 @@ const listarMisBienes = async (authUser) => {
             }
             fotosMap.get(foto.producto).push(foto.foto_url);
         }
+
+        const { data: items, error: itemsError } = await supabase
+            .from('itemscatalogo')
+            .select('producto, preciobase, comision')
+            .in('producto', productoIds);
+
+        if (!itemsError) {
+            for (const item of items || []) {
+                itemsMap.set(item.producto, { preciobase: item.preciobase, comision: item.comision });
+            }
+        }
     }
 
+    const productosFiltrados = (productos || []).filter((p) => {
+        if (mapEstadoProducto(p.disponible) !== 'RECHAZADO') return true;
+        return itemsMap.has(p.identificador);
+    });
+
     return {
-        productos: (productos || []).map((p) => ({
-            producto_id: p.identificador,
-            descripcioncatalogo: p.descripcioncatalogo || null,
-            descripcioncompleta: p.descripcioncompleta || null,
-            status: mapEstadoProducto(p.disponible),
-            fotos: fotosMap.get(p.identificador) || []
-        }))
+        productos: productosFiltrados.map((p) => {
+            const itemData = itemsMap.get(p.identificador);
+            return {
+                producto_id: p.identificador,
+                descripcioncatalogo: p.descripcioncatalogo || null,
+                descripcioncompleta: p.descripcioncompleta || null,
+                status: mapEstadoProducto(p.disponible),
+                preciobase: itemData?.preciobase ?? null,
+                comision: itemData?.comision ?? null,
+                fotos: fotosMap.get(p.identificador) || []
+            };
+        })
     };
 };
 
@@ -372,9 +396,109 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     };
 };
 
+const retirarProducto = async ({ authUser, productoId }) => {
+    const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;
+    if (!clienteId) {
+        throw new AppError('No autenticado', 401);
+    }
+
+    const normalizedProductoId = parseNumber(productoId) ?? String(productoId || '').trim();
+    if (!normalizedProductoId) {
+        throw new AppError('Artículo no encontrado', 404);
+    }
+
+    if (!isConfigured) {
+        const productos = store.productos || [];
+        const producto = productos.find((item) => String(item.id) === String(normalizedProductoId));
+        if (!producto) {
+            throw new AppError('Artículo no encontrado', 404);
+        }
+        if (String(producto.duenio) !== String(clienteId)) {
+            throw new AppError('No es el propietario del artículo', 403);
+        }
+
+        const bids = (store.bids || []).filter((bid) => String(bid.item_id) === String(normalizedProductoId));
+        if (bids.length) {
+            throw new AppError('No se puede retirar (tiene pujas activas)', 400);
+        }
+
+        producto.disponible = 'no';
+        store.productos = productos;
+        return { mensaje: 'Artículo retirado de la subasta' };
+    }
+
+    await ensureDuenioSupabase(clienteId);
+
+    const { data: producto, error: productoError } = await supabase
+        .from('productos')
+        .select('identificador, duenio')
+        .eq('identificador', normalizedProductoId)
+        .maybeSingle();
+
+    if (productoError) {
+        throw new AppError('Error al obtener producto: ' + productoError.message, 500);
+    }
+
+    if (!producto) {
+        throw new AppError('Artículo no encontrado', 404);
+    }
+
+    if (String(producto.duenio) !== String(clienteId)) {
+        throw new AppError('No es el propietario del artículo', 403);
+    }
+
+    const { data: itemsCatalogo, error: itemsError } = await supabase
+        .from('itemscatalogo')
+        .select('identificador')
+        .eq('producto', normalizedProductoId);
+
+    if (itemsError) {
+        throw new AppError('Error al obtener itemscatalogo: ' + itemsError.message, 500);
+    }
+
+    const itemIds = (itemsCatalogo || []).map((item) => item.identificador).filter(Boolean);
+
+    if (itemIds.length) {
+        const { data: bids, error: bidsError } = await supabase
+            .from('pujos')
+            .select('identificador')
+            .in('item', itemIds)
+            .limit(1);
+
+        if (bidsError) {
+            throw new AppError('Error al validar pujas: ' + bidsError.message, 500);
+        }
+
+        if ((bids || []).length) {
+            throw new AppError('No se puede retirar (tiene pujas activas)', 400);
+        }
+
+        const { error: deleteItemError } = await supabase
+            .from('itemscatalogo')
+            .delete()
+            .eq('producto', normalizedProductoId);
+
+        if (deleteItemError) {
+            throw new AppError('Error al retirar artículo: ' + deleteItemError.message, 500);
+        }
+    }
+
+    const { error: updateError } = await supabase
+        .from('productos')
+        .update({ disponible: 'no' })
+        .eq('identificador', normalizedProductoId);
+
+    if (updateError) {
+        throw new AppError('Error al retirar artículo: ' + updateError.message, 500);
+    }
+
+    return { mensaje: 'Artículo retirado de la subasta' };
+};
+
 module.exports = {
     obtenerOpciones,
     obtenerSubastasPorTematica,
     listarMisBienes,
-    crearProducto
+    crearProducto,
+    retirarProducto
 };

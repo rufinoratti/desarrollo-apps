@@ -43,4 +43,7 @@ router.get('/mis-bienes', authMiddleware, misBienesController.listarMisBienes);
 // Crear producto con fotos
 router.post('/mis-bienes/productos', authMiddleware, upload.array('fotos', 6), misBienesController.crearProducto);
 
+// Retirar producto (solo si no tiene pujas)
+router.delete('/mis-bienes/productos/:id', authMiddleware, misBienesController.retirarProducto);
+
 module.exports = router;
