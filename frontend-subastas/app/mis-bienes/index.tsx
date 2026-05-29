@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, ScrollView, RefreshControl, Alert, Modal, Dimensions, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, Stack } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { router, Stack, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
 import { API_URL } from '@/src/config/env';
@@ -12,7 +12,7 @@ interface ProductoItem {
   producto_id: string | number;
   descripcioncatalogo: string | null;
   descripcioncompleta: string | null;
-  status: 'EN_REVISION' | 'APROBADO' | 'RECHAZADO';
+  status: 'EN_REVISION' | 'APROBADO' | 'RECHAZADO' | 'RETIRADO';
   preciobase: number | null;
   comision: number | null;
   fotos: string[];
@@ -64,9 +64,11 @@ export default function MisBienesScreen() {
     }
   }, [token, removeToken]);
 
-  useEffect(() => {
-    fetchProductos();
-  }, [fetchProductos]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProductos();
+    }, [fetchProductos])
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

@@ -467,6 +467,42 @@ const listarClientesRechazados = async () => {
         }));
 };
 
+const obtenerOpcionesAdmin = async () => {
+    if (!isConfigured) {
+        return { revisores: [] };
+    }
+
+    const { data: revisoresData, error: revisoresError } = await supabase
+        .from('empleados')
+        .select('identificador, cargo, nombre')
+        .ilike('cargo', '%revisor%');
+
+    if (revisoresError && /column .*nombre/i.test(revisoresError.message || '')) {
+        const { data: fallback, error: fallbackError } = await supabase
+            .from('empleados')
+            .select('identificador, cargo')
+            .ilike('cargo', '%revisor%');
+
+        if (fallbackError) throw new AppError('Error al obtener revisores: ' + fallbackError.message, 500);
+
+        return {
+            revisores: (fallback || []).map((row) => ({
+                id: row.identificador,
+                nombre: row.cargo || `Revisor ${row.identificador}`
+            }))
+        };
+    }
+
+    if (revisoresError) throw new AppError('Error al obtener revisores: ' + revisoresError.message, 500);
+
+    return {
+        revisores: (revisoresData || []).map((row) => ({
+            id: row.identificador,
+            nombre: row.nombre || row.cargo || `Revisor ${row.identificador}`
+        }))
+    };
+};
+
 module.exports = {
     evaluarCliente,
     evaluarProducto,
@@ -474,5 +510,6 @@ module.exports = {
     subirPortadaSubasta,
     listarClientesPendientes,
     listarProductosPendientes,
-    listarClientesRechazados
+    listarClientesRechazados,
+    obtenerOpcionesAdmin
 };

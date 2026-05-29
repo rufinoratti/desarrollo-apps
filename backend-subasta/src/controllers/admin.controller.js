@@ -69,6 +69,15 @@ const listarClientesRechazados = async (req, res, next) => {
     }
 };
 
+const obtenerOpciones = async (req, res, next) => {
+    try {
+        const result = await adminService.obtenerOpcionesAdmin();
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     evaluarCliente,
     evaluarProducto,
@@ -76,5 +85,6 @@ module.exports = {
     subirPortadaSubasta,
     listarClientesPendientes,
     listarProductosPendientes,
-    listarClientesRechazados
+    listarClientesRechazados,
+    obtenerOpciones
 };

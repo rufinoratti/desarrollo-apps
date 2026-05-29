@@ -252,10 +252,10 @@ export default function AgregarProductoScreen() {
             keyboardType="numeric"
           />
           <Input
-            label="Comisión"
+            label="Comisión (%)"
             value={comision}
             onChangeText={setComision}
-            placeholder="Ej: 15000"
+            placeholder="Ej: 10"
             keyboardType="numeric"
           />
         </View>
@@ -316,7 +316,7 @@ export default function AgregarProductoScreen() {
           />
         </View>
 
-        <Button title={saving ? 'Enviando...' : 'PUBLICAR PRODUCTO'} onPress={handleSubmit} disabled={saving} />
+        <Button title="PUBLICAR PRODUCTO" onPress={handleSubmit} loading={saving} />
         <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
