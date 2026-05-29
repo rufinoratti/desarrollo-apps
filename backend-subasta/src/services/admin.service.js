@@ -253,6 +253,32 @@ const crearSubasta = async ({ payload }) => {
             throw new AppError('Error al crear subasta: ' + error.message, 500);
         }
 
+        const catalogoNombre = String(nombre).trim();
+        const { data: responsable, error: respError } = await supabase
+            .from('empleados')
+            .select('identificador')
+            .ilike('cargo', '%resp%')
+            .limit(1)
+            .maybeSingle();
+
+        if (respError) {
+            throw new AppError('Error al obtener responsable: ' + respError.message, 500);
+        }
+
+        const { data: catalogo, error: catError } = await supabase
+            .from('catalogos')
+            .insert({
+                descripcion: catalogoNombre,
+                subasta: data.identificador,
+                responsable: responsable?.identificador || data.identificador
+            })
+            .select('identificador')
+            .single();
+
+        if (catError) {
+            throw new AppError('Error al crear catálogo: ' + catError.message, 500);
+        }
+
         return {
             mensaje: 'Subasta creada exitosamente',
             subasta_id: String(data.identificador),
@@ -263,7 +289,8 @@ const crearSubasta = async ({ payload }) => {
             categoria: data.categoria,
             tematica: data.tematica,
             estado: data.estado,
-            imagen: data.imagen
+            imagen: data.imagen,
+            catalogo_id: catalogo.identificador
         };
     }
 
@@ -296,6 +323,11 @@ const crearSubasta = async ({ payload }) => {
     subastas.push(nuevaSubasta);
     store.subastas = subastas;
 
+    const catalogos = store.catalogos || [];
+    const catalogoId = nextId('c', 'catalogo');
+    catalogos.push({ id: catalogoId, descripcion: String(nombre).trim(), subasta: subastaId, responsable: null });
+    store.catalogos = catalogos;
+
     return {
         mensaje: 'Subasta creada exitosamente',
         subasta_id: subastaId,
@@ -306,7 +338,8 @@ const crearSubasta = async ({ payload }) => {
         categoria: nuevaSubasta.nivel_acceso,
         tematica: nuevaSubasta.categoria_id,
         estado: nuevaSubasta.estado,
-        imagen: nuevaSubasta.imagen_portada
+        imagen: nuevaSubasta.imagen_portada,
+        catalogo_id: catalogoId
     };
 };
 

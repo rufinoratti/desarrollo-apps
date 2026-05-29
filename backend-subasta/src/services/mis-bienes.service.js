@@ -135,12 +135,16 @@ const obtenerSubastasPorTematica = async ({ tematica }) => {
 
     if (!isConfigured) {
         const subastas = (store.subastas || []).filter((s) => Number(s.categoria_id) === tematicaId);
-        return subastas.map((s) => ({
-            id: s.id,
-            nombre: s.titulo,
-            fecha: s.fecha_inicio || null,
-            hora: null
-        }));
+        return subastas.map((s) => {
+            const cat = (store.catalogos || []).find((c) => String(c.subasta) === String(s.id));
+            return {
+                id: s.id,
+                nombre: s.titulo,
+                fecha: s.fecha_inicio || null,
+                hora: null,
+                catalogo_id: cat?.id || null
+            };
+        }).filter((s) => Boolean(s.catalogo_id));
     }
 
     const { data: subastas, error: subastasError } = await supabase
@@ -154,12 +158,29 @@ const obtenerSubastasPorTematica = async ({ tematica }) => {
         throw new AppError('Error al obtener subastas: ' + subastasError.message, 500);
     }
 
-    return (subastas || []).map((s) => ({
-        id: s.identificador,
-        nombre: s.nombre || `Subasta #${s.identificador}`,
-        fecha: s.fecha || null,
-        hora: s.hora || null
-    }));
+    const subastaIds = (subastas || []).map((s) => s.identificador).filter(Boolean);
+    if (!subastaIds.length) return [];
+
+    const { data: catalogos, error: catalogosError } = await supabase
+        .from('catalogos')
+        .select('identificador, subasta')
+        .in('subasta', subastaIds);
+
+    if (catalogosError) {
+        throw new AppError('Error al obtener catálogos: ' + catalogosError.message, 500);
+    }
+
+    const catalogoMap = new Map((catalogos || []).map((c) => [c.subasta, c.identificador]));
+
+    return (subastas || [])
+        .map((s) => ({
+            id: s.identificador,
+            nombre: s.nombre || `Subasta #${s.identificador}`,
+            fecha: s.fecha || null,
+            hora: s.hora || null,
+            catalogo_id: catalogoMap.get(s.identificador) || null
+        }))
+        .filter((s) => Boolean(s.catalogo_id));
 };
 
 const listarCatalogosPorSubasta = async ({ authUser, subastaId }) => {
