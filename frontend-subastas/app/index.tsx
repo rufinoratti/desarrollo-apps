@@ -22,7 +22,7 @@ export default function SplashScreen() {
       if (token) {
         router.replace('/(tabs)');
       } else {
-        router.replace('/(auth)/onboarding');
+        router.replace('/onboarding');
       }
     }, 2500);
 
