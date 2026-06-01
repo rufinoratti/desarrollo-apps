@@ -36,5 +36,6 @@ router.post('/perfil/foto', authMiddleware, upload.single('foto'), perfilControl
 router.delete('/perfil/foto', authMiddleware, perfilController.eliminarFotoPerfil);
 router.get('/perfil/estadisticas', authMiddleware, perfilController.obtenerEstadisticas);
 router.get('/perfil/restricciones', authMiddleware, perfilController.obtenerRestricciones);
+router.post('/perfil/duenio', authMiddleware, perfilController.registrarComoDuenio);
 
 module.exports = router;

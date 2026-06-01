@@ -54,11 +54,21 @@ const obtenerRestricciones = async (req, res, next) => {
     }
 };
 
+const registrarComoDuenio = async (req, res, next) => {
+    try {
+        const result = await perfilService.registrarComoDuenio(req.user);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     obtenerPerfil,
     actualizarPerfil,
     subirFotoPerfil,
     eliminarFotoPerfil,
     obtenerEstadisticas,
-    obtenerRestricciones
+    obtenerRestricciones,
+    registrarComoDuenio
 };

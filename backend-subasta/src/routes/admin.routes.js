@@ -65,4 +65,16 @@ router.post('/admin/subastas', authMiddleware, adminController.crearSubasta);
 // Subir imagen de portada para subasta
 router.post('/admin/subastas/portada', authMiddleware, upload.single('imagen'), adminController.subirPortadaSubasta);
 
+// Obtener opciones admin (revisores, etc.)
+router.get('/admin/opciones', authMiddleware, adminController.obtenerOpciones);
+
+// Listar todas las subastas
+router.get('/admin/subastas', authMiddleware, adminController.listarSubastas);
+
+// Listar catálogos de una subasta
+router.get('/admin/subastas/:id/catalogos', authMiddleware, adminController.listarCatalogosPorSubasta);
+
+// Crear catálogo
+router.post('/admin/catalogos', authMiddleware, adminController.crearCatalogo);
+
 module.exports = router;
