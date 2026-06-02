@@ -222,8 +222,7 @@ const listarMisBienes = async (authUser) => {
                 descripcioncatalogo: p.descripcioncatalogo || p.descripcion || null,
                 descripcioncompleta: p.descripcioncompleta || null,
                 status: mapEstadoProducto(p.disponible),
-                preciobase: p.preciobase || null,
-                comision: p.comision || null,
+                preciosugerido: p.preciosugerido || null,
                 motivorechazo: p.motivorechazo || null,
                 fotos: []
             }))
@@ -235,7 +234,7 @@ const listarMisBienes = async (authUser) => {
 
     const { data: productos, error: productosError } = await supabase
         .from('productos')
-        .select('identificador, descripcioncatalogo, descripcioncompleta, disponible')
+        .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, preciosugerido')
         .eq('duenio', clienteId)
         .order('identificador', { ascending: false });
 
@@ -289,6 +288,7 @@ const listarMisBienes = async (authUser) => {
                 descripcioncatalogo: p.descripcioncatalogo || null,
                 descripcioncompleta: p.descripcioncompleta || null,
                 status: mapEstadoProducto(p.disponible),
+                preciosugerido: p.preciosugerido ?? null,
                 preciobase: itemData?.preciobase ?? null,
                 comision: itemData?.comision ?? null,
                 fotos: fotosMap.get(p.identificador) || []
@@ -313,7 +313,8 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             disponible: null,
             revisor: payload.revisor,
             duenio: clienteId,
-            seguro: payload.seguro || null
+            seguro: payload.seguro || null,
+            preciosugerido: parseNumber(payload?.preciosugerido) || null
         };
         productos.push(nuevo);
         store.productos = productos;
@@ -326,19 +327,16 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const descripcioncompleta = String(payload?.descripcioncompleta || '').trim();
     const revisorId = parseNumber(payload?.revisor);
     const seguro = payload?.seguro ? String(payload.seguro).trim() : null;
-    const catalogoId = parseNumber(payload?.catalogo_id) || null;
-    const subastaId = parseNumber(payload?.subasta_id) || null;
-    const precioBase = parseNumber(payload?.preciobase);
-    const comision = parseNumber(payload?.comision);
+    const precioSugerido = parseNumber(payload?.preciosugerido);
 
-    if (!descripcioncatalogo || !descripcioncompleta || !revisorId || !precioBase || !comision) {
+    if (!descripcioncatalogo || !descripcioncompleta || !revisorId || !precioSugerido) {
         const err = new AppError('Datos inválidos', 400);
         err.codigo = 'DATOS_INVALIDOS';
         throw err;
     }
 
-    if (precioBase <= 0.01 || comision <= 0.01) {
-        const err = new AppError('Datos inválidos', 400);
+    if (precioSugerido <= 0) {
+        const err = new AppError('El precio sugerido debe ser mayor a 0', 400);
         err.codigo = 'DATOS_INVALIDOS';
         throw err;
     }
@@ -349,25 +347,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         throw err;
     }
 
-    let resolvedCatalogoId = catalogoId;
-    if (!resolvedCatalogoId && subastaId) {
-        const { data: catalogo, error: catalogoError } = await supabase
-            .from('catalogos')
-            .select('identificador')
-            .eq('subasta', subastaId)
-            .maybeSingle();
-        if (catalogoError) {
-            throw new AppError('Error al obtener catálogo: ' + catalogoError.message, 500);
-        }
-        resolvedCatalogoId = catalogo?.identificador || null;
-    }
-
-    if (!resolvedCatalogoId) {
-        const err = new AppError('Debe seleccionar una subasta válida', 400);
-        err.codigo = 'DATOS_INVALIDOS';
-        throw err;
-    }
-
     const { data: producto, error: productoError } = await supabase
         .from('productos')
         .insert({
@@ -375,6 +354,7 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             disponible: null,
             descripcioncatalogo,
             descripcioncompleta,
+            preciosugerido: precioSugerido,
             revisor: revisorId,
             duenio: clienteId,
             seguro: seguro || null
@@ -389,20 +369,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const productoId = producto?.identificador;
 
     try {
-        const { error: itemError } = await supabase
-            .from('itemscatalogo')
-            .insert({
-                catalogo: resolvedCatalogoId,
-                producto: productoId,
-                preciobase: precioBase,
-                comision,
-                subastado: 'no'
-            });
-
-        if (itemError) {
-            throw new AppError('Error al vincular producto: ' + itemError.message, 500);
-        }
-
         const fotosPayload = files.map((file) => ({
             producto: productoId,
             foto_url: `${baseUrl}/uploads/${file.filename}`
@@ -416,7 +382,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             throw new AppError('Error al guardar fotos: ' + fotosError.message, 500);
         }
     } catch (error) {
-        await supabase.from('itemscatalogo').delete().eq('producto', productoId);
         await supabase.from('fotos').delete().eq('producto', productoId);
         await supabase.from('productos').delete().eq('identificador', productoId);
         throw error;
