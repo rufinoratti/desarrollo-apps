@@ -34,7 +34,7 @@ interface EstadoPujas {
 
 export default function CatalogoScreen() {
   const { id, titulo } = useLocalSearchParams<{ id: string; titulo: string }>();
-  const { token, removeToken } = useAuth();
+  const { token, removeToken, nivel } = useAuth();
 
   const removeTokenRef = useRef(removeToken);
   useEffect(() => { removeTokenRef.current = removeToken; }, [removeToken]);
@@ -88,6 +88,51 @@ export default function CatalogoScreen() {
 
   useEffect(() => { if (token) fetchCatalogo(); }, [token, fetchCatalogo]);
 
+  // Helper para mapear niveles a ranking numérico
+  const rankOf = (lvl?: string | number) => {
+    if (!lvl && lvl !== 0) return 1;
+    const s = String(lvl)
+      .trim()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+    const digits = s.match(/\d+/);
+    if (digits?.[0]) {
+      const num = Number(digits[0]);
+      if (num >= 1 && num <= 5) return num;
+    }
+    if (s.includes('platino') || s.includes('platinum')) return 5;
+    if (s.includes('oro')) return 4;
+    if (s.includes('plata')) return 3;
+    if (s.includes('especial')) return 2;
+    if (s.includes('comun') || s.includes('base')) return 1;
+    switch (s) {
+      case 'base':
+      case 'comun':
+      case '1':
+        return 1;
+      case 'especial':
+      case '2':
+        return 2;
+      case 'plata':
+      case '3':
+        return 3;
+      case 'oro':
+      case '4':
+        return 4;
+      case 'platino':
+      case '5':
+        return 5;
+      default:
+        return 1;
+    }
+  };
+
+  const nivelUsuario = rankOf(nivel || 'base');
+  const rawReqSubasta = (subastaInfo as any)?.nivel_acceso ?? (subastaInfo as any)?.nivel ?? '';
+  const nivelReqSubasta = rankOf(rawReqSubasta || 'comun');
+  const subastaBloqueada = nivelUsuario < nivelReqSubasta;
+
   // Cuando cambian los artículos, trae las ofertas actuales de todos en paralelo
   useEffect(() => {
     if (!articulos.length || !token) return;
@@ -130,6 +175,7 @@ export default function CatalogoScreen() {
   };
 
   const handleAbrirPuja = (articulo: ArticuloItem) => {
+    if (subastaBloqueada) return; // prevenir apertura si nivel insuficiente
     setArticuloSeleccionado(articulo);
     setMontoPuja('');
     setErrorPuja(null);
@@ -231,7 +277,7 @@ export default function CatalogoScreen() {
     <View style={styles.card}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => handleAbrirPuja(item)}
+        onPress={() => { if (!subastaBloqueada) handleAbrirPuja(item); }}
         style={styles.imageContainer}
       >
         <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="contain" />
@@ -262,8 +308,12 @@ export default function CatalogoScreen() {
             <Text style={styles.ofertaLabel}>OFERTA ACTUAL</Text>
             <Text style={styles.ofertaMonto}>{formatearPrecio(ofertasActuales[item.id] ?? item.precio_base)}</Text>
           </View>
-          <TouchableOpacity style={styles.pujarBtn} onPress={() => handleAbrirPuja(item)}>
-            <Text style={styles.pujarBtnTexto}>PUJAR</Text>
+          <TouchableOpacity
+            style={[styles.pujarBtn, subastaBloqueada && styles.pujarBtnDisabled]}
+            onPress={() => { if (!subastaBloqueada) handleAbrirPuja(item); }}
+            disabled={subastaBloqueada}
+          >
+            <Text style={[styles.pujarBtnTexto, subastaBloqueada && styles.pujarBtnTextoDisabled]}>PUJAR</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -308,6 +358,17 @@ export default function CatalogoScreen() {
               <Ionicons name="close-circle" size={20} color="#999" />
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {subastaInfo && (
+        <View style={styles.subastaHeader}>
+          <Text style={styles.subastaHeaderEyebrow}>SUBASTA</Text>
+          <Text style={styles.subastaTitulo} numberOfLines={2}>{subastaInfo.titulo}</Text>
+          <View style={styles.subastaMetaRow}>
+            <Text style={styles.subastaMetaLabel}>ARTÍCULOS</Text>
+            <Text style={styles.subastaMetaValue}>{articulos.length}</Text>
+          </View>
         </View>
       )}
 
@@ -495,6 +556,12 @@ const styles = StyleSheet.create({
   busquedaBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 8 },
   busquedaInput: { flex: 1, fontSize: 16, color: '#000', paddingVertical: 4 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 24 },
+  subastaHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, marginHorizontal: 16, marginBottom: 8, backgroundColor: '#F5F0E8', borderRadius: 12, borderWidth: 1, borderColor: '#E8DFCF' },
+  subastaHeaderEyebrow: { fontSize: 10, fontWeight: '700', color: '#8B6F47', letterSpacing: 2, marginBottom: 6 },
+  subastaTitulo: { fontSize: 18, fontWeight: '700', color: '#2A1F14', marginBottom: 8 },
+  subastaMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  subastaMetaLabel: { fontSize: 9, fontWeight: '700', color: '#8B6F47', letterSpacing: 1 },
+  subastaMetaValue: { fontSize: 12, fontWeight: '700', color: '#2A1F14' },
   card: { width: '100%', backgroundColor: '#F8F9FA' },
   imageContainer: { width: '100%', height: 220, backgroundColor: '#EAEAEA', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   cardImagen: { width: '100%', height: '100%' },
@@ -515,6 +582,8 @@ const styles = StyleSheet.create({
   ofertaMonto: { fontSize: 18, fontWeight: '700', color: '#000' },
   pujarBtn: { backgroundColor: '#000', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 16 },
   pujarBtnTexto: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  pujarBtnDisabled: { opacity: 0.5 },
+  pujarBtnTextoDisabled: { color: '#fff' },
   // Modal orden
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '80%' },

@@ -39,7 +39,7 @@ const Skeleton = ({ width, height, borderRadius, style }: any) => {
 };
 
 export default function Home() {
-  const { nombre, token, removeToken, isLoading } = useAuth();
+  const { nombre, token, removeToken, isLoading, nivel } = useAuth();
   
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [subastas, setSubastas] = useState<Subasta[]>([]);
@@ -127,28 +127,105 @@ const fetchCategorias = async () => {
     );
   };
 
-  const renderSubasta = ({ item }: { item: Subasta }) => (
-    <View style={styles.card}>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: item.imagen_portada || item.imagen }} style={styles.cardImage} />
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{item.estado ?? ''}</Text>
+  const renderSubasta = ({ item }: { item: Subasta }) => {
+    // Determina el ranking del nivel (maneja distintas convenciones: BASE/ORO/PLATINO o comun/oro/platino)
+    const rankOf = (lvl?: string | number) => {
+      if (!lvl && lvl !== 0) return 1;
+      const s = String(lvl)
+        .trim()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+      const digits = s.match(/\d+/);
+      if (digits?.[0]) {
+        const num = Number(digits[0]);
+        if (num >= 1 && num <= 5) return num;
+      }
+      if (s.includes('platino') || s.includes('platinum')) return 5;
+      if (s.includes('oro')) return 4;
+      if (s.includes('plata')) return 3;
+      if (s.includes('especial')) return 2;
+      if (s.includes('comun') || s.includes('base')) return 1;
+      switch (s) {
+        case 'base':
+        case 'comun':
+        case '1':
+          return 1;
+        case 'especial':
+        case '2':
+          return 2;
+        case 'plata':
+        case '3':
+          return 3;
+        case 'oro':
+        case '4':
+          return 4;
+        case 'platino':
+        case 'platinum':
+        case '5':
+          return 5;
+        case 'oro':
+          return 4;
+        case 'platino':
+          return 5;
+        // Niveles en mayúscula del mock-server
+        case 'base'.toUpperCase():
+        case 'oro'.toUpperCase():
+        case 'platino'.toUpperCase():
+          return rankOf(s.toLowerCase());
+        default:
+          // Intentar mapear claves comunes en mayúscula (BASE, ORO, PLATINO)
+          if (s === 'base') return 1;
+          if (s === 'oro') return 4;
+          if (s === 'platino') return 5;
+          return 1;
+      }
+    };
+
+    const nivelUsuario = rankOf(nivel || 'base');
+    const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
+    const nivelReq = rankOf(rawReq);
+    const bloqueada = nivelUsuario < nivelReq;
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: item.imagen_portada || item.imagen }}
+            style={styles.cardImage}
+            blurRadius={bloqueada ? 6 : 0}
+          />
+          {bloqueada && (
+            <View style={styles.overlayBloqueada}>
+              <Ionicons name="lock-closed" size={28} color="#fff" />
+              <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
+            </View>
+          )}
+          {!bloqueada && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{item.estado ?? ''}</Text>
+            </View>
+          )}
         </View>
+
+        <Text style={styles.cardTitle}>{item.titulo ?? ''}</Text>
+        <Text style={styles.cardSubtitle}>{item.cantidad_articulos ?? item.articulos ?? 0} articulos — {item.ubicacion ?? ''}</Text>
+
+        <TouchableOpacity 
+          style={[styles.cardButton, bloqueada && styles.cardButtonDisabled]}
+          onPress={() => {
+            if (bloqueada) return;
+            const subastaId = item.subasta_id ?? item.id;
+            if (!subastaId) return;
+            router.push({ pathname: '/catalogo/[id]', params: { id: String(subastaId), titulo: item.titulo ?? '' } } as any);
+          }}
+          disabled={bloqueada}
+        >
+          <Text style={[styles.cardButtonText, bloqueada && styles.cardButtonTextDisabled]}>VER CATÁLOGO</Text>
+        </TouchableOpacity>
       </View>
-      <Text style={styles.cardTitle}>{item.titulo ?? ''}</Text>
-      <Text style={styles.cardSubtitle}>{item.cantidad_articulos ?? item.articulos ?? 0} articulos — {item.ubicacion ?? ''}</Text>
-      <TouchableOpacity 
-        style={styles.cardButton} 
-        onPress={() => {
-          const subastaId = item.subasta_id ?? item.id;
-          if (!subastaId) return;
-          router.push({ pathname: '/catalogo/[id]', params: { id: String(subastaId), titulo: item.titulo ?? '' } } as any);
-        }}
-      >
-        <Text style={styles.cardButtonText}>VER CATÁLOGO</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -246,5 +323,24 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
   cardSubtitle: { fontSize: 12, color: '#666', marginBottom: 15 },
   cardButton: { borderWidth: 1, borderColor: '#000', borderRadius: 25, paddingVertical: 15, alignItems: 'center' },
-  cardButtonText: { fontSize: 12, fontWeight: 'bold', color: '#000', letterSpacing: 1 }
+  cardButtonText: { fontSize: 12, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
+  cardButtonDisabled: { opacity: 0.5 },
+  cardButtonTextDisabled: { color: '#000' },
+  overlayBloqueada: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(120, 120, 120, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  textoAcceso: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
 });

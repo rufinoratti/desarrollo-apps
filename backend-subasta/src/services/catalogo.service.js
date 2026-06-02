@@ -62,7 +62,9 @@ const obtenerCatalogoPorSubastaLocal = ({ subastaId, q, orden }) => {
         subasta_info: {
             id: String(subasta.id),
             titulo: subasta.titulo,
-            estado: subasta.estado
+            estado: subasta.estado,
+            nivel_acceso: subasta.nivel_acceso || subasta.categoria || null,
+            imagen_portada: subasta.imagen_portada || subasta.imagen || null
         },
         articulos: articulos.map(({ tiempo_referencia, ...articulo }) => articulo),
         total_articulos: articulos.length
@@ -77,7 +79,7 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
 
     const { data: subasta, error: subastaError } = await supabase
         .from('subastas')
-        .select('identificador, estado, ubicacion')
+        .select('identificador, estado, ubicacion, categoria, nombre, imagen')
         .eq('identificador', subastaIdNum)
         .maybeSingle();
 
@@ -103,8 +105,10 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
         return {
             subasta_info: {
                 id: String(subasta.identificador),
-                titulo: `Subasta #${subasta.identificador}`,
-                estado: estadoSubastaDbToApi(subasta.estado)
+                titulo: catalogo?.descripcion || `Subasta #${subasta.identificador}`,
+                estado: estadoSubastaDbToApi(subasta.estado),
+                nivel_acceso: subasta.categoria || null,
+                imagen_portada: subasta.imagen || null
             },
             articulos: [],
             total_articulos: 0
@@ -182,7 +186,9 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
         subasta_info: {
             id: String(subasta.identificador),
             titulo: catalogo.descripcion || `Subasta #${subasta.identificador}`,
-            estado: estadoSubastaDbToApi(subasta.estado)
+            estado: estadoSubastaDbToApi(subasta.estado),
+            nivel_acceso: subasta.categoria || null,
+            imagen_portada: subasta.imagen || null
         },
         articulos: articulos.map(({ tiempo_referencia, ...articulo }) => articulo),
         total_articulos: articulos.length
