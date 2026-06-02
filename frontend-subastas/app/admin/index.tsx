@@ -51,6 +51,7 @@ interface ProductoPendiente {
   revisor?: number | null;
   seguro?: string | null;
   duenio?: string | number | null;
+  preciosugerido?: number | null;
   preciobase?: number | null;
   comision?: number | null;
   fotos?: string[];
@@ -115,6 +116,11 @@ export default function AdminPanel() {
   const [imagenFile, setImagenFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [detalleProducto, setDetalleProducto] = useState<ProductoPendiente | null>(null);
   const [showDetalleProducto, setShowDetalleProducto] = useState(false);
+  const [subastasLista, setSubastasLista] = useState<any[]>([]);
+  const [precioBaseAprobar, setPrecioBaseAprobar] = useState('');
+  const [comisionAprobar, setComisionAprobar] = useState('');
+  const [subastaIdAprobar, setSubastaIdAprobar] = useState<number | null>(null);
+  const [subastaLabelAprobar, setSubastaLabelAprobar] = useState('');
 
   const switchTab = (key: typeof tab) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -291,6 +297,19 @@ export default function AdminPanel() {
     }));
   }, [token, handleUnauthorized]);
 
+  const fetchSubastas = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/subastas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { handleUnauthorized(); return []; }
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  }, [token, handleUnauthorized]);
+
   const fetchRevisores = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/admin/opciones`, {
@@ -307,24 +326,26 @@ export default function AdminPanel() {
 
   const cargarDatos = useCallback(async () => {
     try {
-      const [clientesData, clientesRechazadosData, productosData, categoriasData, revisoresData] = await Promise.all([
+      const [clientesData, clientesRechazadosData, productosData, categoriasData, revisoresData, subastasData] = await Promise.all([
         fetchClientes(),
         fetchClientesRechazados(),
         fetchProductos(),
         fetchCategorias(),
         fetchRevisores(),
+        fetchSubastas(),
       ]);
       setClientes(clientesData);
       setClientesRechazados(clientesRechazadosData);
       setProductos(productosData);
       setCategorias(categoriasData);
       setRevisores(revisoresData);
+      setSubastasLista(subastasData);
     } catch {
       Alert.alert('Error', 'No se pudieron cargar los datos del panel admin');
     } finally {
       setLoading(false);
     }
-  }, [fetchClientes, fetchClientesRechazados, fetchProductos, fetchCategorias, fetchRevisores]);
+  }, [fetchClientes, fetchClientesRechazados, fetchProductos, fetchCategorias, fetchRevisores, fetchSubastas]);
 
   useEffect(() => {
     if (token) cargarDatos();
@@ -365,21 +386,45 @@ export default function AdminPanel() {
       Alert.alert('Falta revisor', 'Seleccioná un revisor para evaluar productos.');
       return;
     }
+    if (disponible === 'si') {
+      if (!precioBaseAprobar.trim() || Number(precioBaseAprobar) <= 0) {
+        Alert.alert('Falta precio base', 'Ingresá un precio base mayor a 0.');
+        return;
+      }
+      if (!comisionAprobar.trim() || Number(comisionAprobar) <= 0) {
+        Alert.alert('Falta comisión', 'Ingresá una comisión mayor a 0.');
+        return;
+      }
+      if (!subastaIdAprobar) {
+        Alert.alert('Falta subasta', 'Seleccioná una subasta para publicar el artículo.');
+        return;
+      }
+    }
     const producto = productos.find((p) => String(p.producto_id) === String(productoId));
+    const body: Record<string, any> = {
+      disponible,
+      revisor,
+      descripcioncatalogo: producto?.descripcioncatalogo ?? null,
+      seguro: producto?.seguro ?? null,
+    };
+    if (disponible === 'si') {
+      body.preciobase = Number(precioBaseAprobar);
+      body.comision = Number(comisionAprobar);
+      body.subasta_id = subastaIdAprobar;
+    }
     try {
       const res = await fetch(`${API_URL}/api/admin/productos/${productoId}/evaluacion`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          disponible,
-          revisor,
-          descripcioncatalogo: producto?.descripcioncatalogo ?? null,
-          seguro: producto?.seguro ?? null,
-        }),
+        body: JSON.stringify(body),
       });
       if (res.status === 401) { handleUnauthorized(); return; }
       if (!res.ok) { Alert.alert('Error', 'No se pudo actualizar el producto.'); return; }
       setShowDetalleProducto(false);
+      setPrecioBaseAprobar('');
+      setComisionAprobar('');
+      setSubastaIdAprobar(null);
+      setSubastaLabelAprobar('');
       await cargarDatos();
     } catch { Alert.alert('Error', 'No se pudo actualizar el producto.'); }
   };
@@ -650,15 +695,8 @@ export default function AdminPanel() {
                     )}
                     <View style={styles.productMeta}>
                       <View style={styles.productMetaItem}>
-                        <Text style={styles.productMetaLabel}>Base</Text>
-                        <Text style={styles.productMetaValue}>{formatPrice(producto.preciobase)}</Text>
-                      </View>
-                      <View style={styles.productMetaDivider} />
-                      <View style={styles.productMetaItem}>
-                        <Text style={styles.productMetaLabel}>Comisión</Text>
-                        <Text style={styles.productMetaValue}>
-                          {producto.comision ? `${producto.comision}%` : 'N/D'}
-                        </Text>
+                        <Text style={styles.productMetaLabel}>Sugerido</Text>
+                        <Text style={styles.productMetaValue}>{formatPrice(producto.preciosugerido)}</Text>
                       </View>
                       <View style={styles.productMetaDivider} />
                       <View style={styles.productMetaItem}>
@@ -829,7 +867,7 @@ export default function AdminPanel() {
             <View style={styles.detailCard}>
               <View style={styles.detailHeader}>
                 <Text style={styles.detailTitle}>Detalle del producto</Text>
-                <TouchableOpacity onPress={() => setShowDetalleProducto(false)} style={styles.detailClose}>
+                <TouchableOpacity onPress={() => { setShowDetalleProducto(false); setPrecioBaseAprobar(''); setComisionAprobar(''); setSubastaIdAprobar(null); setSubastaLabelAprobar(''); }} style={styles.detailClose}>
                   <Ionicons name="close" size={22} color="#0F172A" />
                 </TouchableOpacity>
               </View>
@@ -864,14 +902,8 @@ export default function AdminPanel() {
                 <Text style={styles.detailSectionLabel}>Información de subasta</Text>
                 <View style={styles.detailMetaGrid}>
                   <View style={styles.detailMetaItem}>
-                    <Text style={styles.detailMetaLabel}>Precio base</Text>
-                    <Text style={styles.detailMetaValue}>{formatPrice(detalleProducto?.preciobase)}</Text>
-                  </View>
-                  <View style={styles.detailMetaItem}>
-                    <Text style={styles.detailMetaLabel}>Comisión</Text>
-                    <Text style={styles.detailMetaValue}>
-                      {detalleProducto?.comision ? `${detalleProducto.comision}%` : 'N/D'}
-                    </Text>
+                    <Text style={styles.detailMetaLabel}>Precio sugerido</Text>
+                    <Text style={styles.detailMetaValue}>{formatPrice(detalleProducto?.preciosugerido)}</Text>
                   </View>
                   <View style={styles.detailMetaItem}>
                     <Text style={styles.detailMetaLabel}>Seguro</Text>
@@ -884,13 +916,37 @@ export default function AdminPanel() {
                 </View>
 
                 <View style={styles.detailActions}>
-                  <Text style={styles.detailSectionLabel}>Acción</Text>
+                  <Text style={styles.detailSectionLabel}>Configuración de aprobación</Text>
                   <Select
                     label="Revisor"
                     value={revisores.find((r) => String(r.id) === revisorId)?.nombre || ''}
                     placeholder="Seleccionar revisor"
                     options={revisores.map((r) => ({ id: r.id, nombre: r.nombre }))}
                     onSelect={(id) => setRevisorId(String(id))}
+                  />
+                  <Input
+                    label="Precio base"
+                    value={precioBaseAprobar}
+                    onChangeText={setPrecioBaseAprobar}
+                    placeholder="Ej: 150000"
+                    keyboardType="numeric"
+                  />
+                  <Input
+                    label="Comisión (%)"
+                    value={comisionAprobar}
+                    onChangeText={setComisionAprobar}
+                    placeholder="Ej: 10"
+                    keyboardType="numeric"
+                  />
+                  <Select
+                    label="Subasta"
+                    value={subastaLabelAprobar}
+                    options={subastasLista}
+                    placeholder="Seleccionar subasta"
+                    onSelect={(id, label) => {
+                      setSubastaIdAprobar(id);
+                      setSubastaLabelAprobar(label);
+                    }}
                   />
                   <View style={styles.actionRow}>
                     <Button
