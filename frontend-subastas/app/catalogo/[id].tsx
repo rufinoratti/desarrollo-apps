@@ -1,4 +1,7 @@
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, Modal } from 'react-native';
+import {
+  View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
+  Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
@@ -16,21 +19,25 @@ interface ArticuloItem {
 }
 
 interface CatalogoSubastaInfo {
-  id: string;   
+  id: string;
   titulo: string;
   estado: string;
+}
+
+interface EstadoPujas {
+  item_id: string;
+  oferta_actual: number;
+  estado_subasta: string;
+  total_participantes: number;
+  historial_pujas: { monto: number; fecha_hora: string | null; postor: string }[];
 }
 
 export default function CatalogoScreen() {
   const { id, titulo } = useLocalSearchParams<{ id: string; titulo: string }>();
   const { token, removeToken } = useAuth();
 
-  // `removeToken` might not be referentially stable (eg. in tests).
-  // Keep the latest function without forcing `fetchCatalogo` recreation.
   const removeTokenRef = useRef(removeToken);
-  useEffect(() => {
-    removeTokenRef.current = removeToken;
-  }, [removeToken]);
+  useEffect(() => { removeTokenRef.current = removeToken; }, [removeToken]);
 
   const [articulos, setArticulos] = useState<ArticuloItem[]>([]);
   const [subastaInfo, setSubastaInfo] = useState<CatalogoSubastaInfo | null>(null);
@@ -40,6 +47,19 @@ export default function CatalogoScreen() {
   const [ordenSeleccionado, setOrdenSeleccionado] = useState('lote_numero');
   const [modalOrdenVisible, setModalOrdenVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  // Mapa itemId → oferta actual para mostrar en las tarjetas
+  const [ofertasActuales, setOfertasActuales] = useState<Record<string, number>>({});
+
+  // --- Estado modal de puja ---
+  const [modalPujaVisible, setModalPujaVisible] = useState(false);
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState<ArticuloItem | null>(null);
+  const [estadoPujas, setEstadoPujas] = useState<EstadoPujas | null>(null);
+  const [cargandoPujas, setCargandoPujas] = useState(false);
+  const [montoPuja, setMontoPuja] = useState('');
+  const [enviandoPuja, setEnviandoPuja] = useState(false);
+  const [errorPuja, setErrorPuja] = useState<string | null>(null);
+  const [pujaExitosa, setPujaExitosa] = useState(false);
 
   const ordenes = [
     { key: 'lote_numero', label: 'N° Lote' },
@@ -53,27 +73,124 @@ export default function CatalogoScreen() {
     try {
       let url = `${API_URL}/api/subastas/${id}/catalogo?orden=${ord || ordenSeleccionado}`;
       if (q) url += `&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        removeTokenRef.current?.();
-        return;
-      }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { removeTokenRef.current?.(); return; }
       if (!res.ok) return;
       const data = await res.json();
       setSubastaInfo(data.subasta_info);
       setArticulos(data.articulos);
     } catch {
-      // Silencioso
+      // silencioso
     } finally {
       setCargando(false);
     }
   }, [id, ordenSeleccionado, token]);
 
+  useEffect(() => { if (token) fetchCatalogo(); }, [token, fetchCatalogo]);
+
+  // Cuando cambian los artículos, trae las ofertas actuales de todos en paralelo
   useEffect(() => {
-    if (token) fetchCatalogo();
-  }, [token, fetchCatalogo]);
+    if (!articulos.length || !token) return;
+    const fetchOfertas = async () => {
+      const resultados = await Promise.allSettled(
+        articulos.map(art =>
+          fetch(`${API_URL}/api/items/${art.id}/pujas`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(r => r.ok ? r.json() : null)
+        )
+      );
+      const nuevasOfertas: Record<string, number> = {};
+      resultados.forEach((res, idx) => {
+        if (res.status === 'fulfilled' && res.value?.oferta_actual !== undefined) {
+          nuevasOfertas[articulos[idx].id] = res.value.oferta_actual;
+        }
+      });
+      setOfertasActuales(nuevasOfertas);
+    };
+    fetchOfertas();
+  }, [articulos, token]);
+
+  // Trae el estado actual de pujas del ítem (oferta actual, historial)
+  const fetchEstadoPujas = async (itemId: string) => {
+    setCargandoPujas(true);
+    setEstadoPujas(null);
+    try {
+      const res = await fetch(`${API_URL}/api/items/${itemId}/pujas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { removeTokenRef.current?.(); return; }
+      if (!res.ok) return;
+      const data: EstadoPujas = await res.json();
+      setEstadoPujas(data);
+    } catch {
+      // silencioso
+    } finally {
+      setCargandoPujas(false);
+    }
+  };
+
+  const handleAbrirPuja = (articulo: ArticuloItem) => {
+    setArticuloSeleccionado(articulo);
+    setMontoPuja('');
+    setErrorPuja(null);
+    setPujaExitosa(false);
+    setModalPujaVisible(true);
+    fetchEstadoPujas(articulo.id);
+  };
+
+  const handleCerrarPuja = () => {
+    setModalPujaVisible(false);
+    setArticuloSeleccionado(null);
+    setEstadoPujas(null);
+    setMontoPuja('');
+    setErrorPuja(null);
+    setPujaExitosa(false);
+    // Refresca el catálogo para actualizar precios
+    fetchCatalogo();
+  };
+
+  const handleConfirmarPuja = async () => {
+    if (!articuloSeleccionado) return;
+    const monto = parseFloat(montoPuja.replace(/\./g, '').replace(',', '.'));
+    if (isNaN(monto) || monto <= 0) {
+      setErrorPuja('Ingresá un monto válido.');
+      return;
+    }
+    setEnviandoPuja(true);
+    setErrorPuja(null);
+    try {
+      const res = await fetch(`${API_URL}/api/pujas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ item_id: articuloSeleccionado.id, monto_ofertado: monto }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        // Mapea los códigos de error del backend a mensajes amigables
+        const mensajes: Record<string, string> = {
+          MONTO_INSUFICIENTE: `El monto mínimo es ${data.monto_minimo ? formatearPrecio(data.monto_minimo) : 'mayor a la oferta actual'}.`,
+          MONTO_EXCEDE_LIMITE: 'El monto supera el límite máximo permitido para tu categoría.',
+          USUARIO_EN_OTRA_SALA: 'Ya estás participando en otra subasta activa. Cerrá esa sesión primero.',
+        };
+        setErrorPuja(mensajes[data.codigo] || data.error || 'No se pudo registrar la puja.');
+        return;
+      }
+      // Puja exitosa
+      setPujaExitosa(true);
+      setEstadoPujas(prev => prev ? { ...prev, oferta_actual: data.oferta_actual } : prev);
+      // Actualiza la tarjeta del catálogo inmediatamente
+      setOfertasActuales(prev => ({ ...prev, [articuloSeleccionado.id]: data.oferta_actual }));
+      // Refresca el historial de pujas
+      fetchEstadoPujas(articuloSeleccionado.id);
+    } catch {
+      setErrorPuja('Error de conexión. Revisá tu red e intentá de nuevo.');
+    } finally {
+      setEnviandoPuja(false);
+    }
+  };
 
   const handleToggleBusqueda = () => {
     setBusquedaVisible(!busquedaVisible);
@@ -85,9 +202,7 @@ export default function CatalogoScreen() {
     }
   };
 
-  const handleSearch = () => {
-    fetchCatalogo(textoBusqueda);
-  };
+  const handleSearch = () => { fetchCatalogo(textoBusqueda); };
 
   const handleOrdenChange = (key: string) => {
     setOrdenSeleccionado(key);
@@ -95,45 +210,36 @@ export default function CatalogoScreen() {
     fetchCatalogo(textoBusqueda || undefined, key);
   };
 
-  const formatearPrecio = (monto: number) => {
-    return `$ ${new Intl.NumberFormat('es-AR', {
-      maximumFractionDigits: 0,
-    }).format(monto)}`;
-  };
+  const formatearPrecio = (monto: number) =>
+    `$ ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(monto)}`;
 
-  const calcularTiempoRestante = (fechaFin: string | undefined) => {
-    if (!fechaFin) return '00h 00m';
-    
-    // Si no hay fecha en el backend para artículos, ponemos un mock para mostrar algo dinámico
+  const calcularTiempoRestante = (_fechaFin: string | undefined) => {
     const ahora = new Date().getTime();
-    const fin = new Date(ahora + 12 * 60 * 60 * 1000 + 15 * 60 * 1000).getTime(); // Mock +12h 15m
-    
+    const fin = new Date(ahora + 12 * 60 * 60 * 1000 + 15 * 60 * 1000).getTime();
     const diferencia = fin - ahora;
     if (diferencia <= 0) return '00h 00m';
-
     const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-
     return `${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
   };
+
+  const montoMinimo = estadoPujas
+    ? estadoPujas.oferta_actual + (articuloSeleccionado ? articuloSeleccionado.precio_base * 0.01 : 0)
+    : articuloSeleccionado?.precio_base ?? 0;
 
   const renderArticulo = ({ item }: { item: ArticuloItem }) => (
     <View style={styles.card}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => {
-          router.push({ pathname: '/producto/[id]', params: { id: item.id } });
-        }}
+        onPress={() => handleAbrirPuja(item)}
         style={styles.imageContainer}
       >
         <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="contain" />
-        
         {item.estado === 'DISPONIBLE' && (
           <View style={styles.badgeEnVivo}>
             <Text style={styles.badgeEnVivoTexto}>EN VIVO</Text>
           </View>
         )}
-
         <View style={styles.badgeRestan}>
           <Text style={styles.badgeRestanLabel}>RESTAN</Text>
           <Text style={styles.badgeRestanTexto}>{calcularTiempoRestante(undefined)}</Text>
@@ -150,15 +256,13 @@ export default function CatalogoScreen() {
             <Ionicons name="heart-outline" size={22} color="#666" />
           </TouchableOpacity>
         </View>
-
         <View style={styles.divider} />
-
         <View style={styles.cardFooterRow}>
           <View>
             <Text style={styles.ofertaLabel}>OFERTA ACTUAL</Text>
-            <Text style={styles.ofertaMonto}>{formatearPrecio(item.precio_base)}</Text>
+            <Text style={styles.ofertaMonto}>{formatearPrecio(ofertasActuales[item.id] ?? item.precio_base)}</Text>
           </View>
-          <TouchableOpacity style={styles.pujarBtn} onPress={() => router.push({ pathname: '/producto/[id]', params: { id: item.id } })}>
+          <TouchableOpacity style={styles.pujarBtn} onPress={() => handleAbrirPuja(item)}>
             <Text style={styles.pujarBtnTexto}>PUJAR</Text>
           </TouchableOpacity>
         </View>
@@ -176,6 +280,7 @@ export default function CatalogoScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
           <Ionicons name="chevron-back" size={24} color="#000" />
@@ -214,12 +319,9 @@ export default function CatalogoScreen() {
         showsVerticalScrollIndicator={false}
       />
 
+      {/* Modal orden */}
       <Modal visible={modalOrdenVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setModalOrdenVisible(false)}
-        >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalOrdenVisible(false)}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitulo}>ORDENAR POR</Text>
             {ordenes.map((ord) => (
@@ -231,13 +333,153 @@ export default function CatalogoScreen() {
                 <Text style={[styles.modalOpcionTexto, ordenSeleccionado === ord.key && styles.modalOpcionTextoActiva]}>
                   {ord.label}
                 </Text>
-                {ordenSeleccionado === ord.key && (
-                  <Ionicons name="checkmark" size={20} color="#000" />
-                )}
+                {ordenSeleccionado === ord.key && <Ionicons name="checkmark" size={20} color="#000" />}
               </TouchableOpacity>
             ))}
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ======================================================
+          MODAL DE PUJA
+      ====================================================== */}
+      <Modal visible={modalPujaVisible} transparent animationType="slide" onRequestClose={handleCerrarPuja}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.pujaModalWrapper}
+        >
+          <TouchableOpacity style={styles.pujaModalOverlay} activeOpacity={1} onPress={handleCerrarPuja} />
+
+          <View style={styles.pujaModalContainer}>
+            {/* Handle */}
+            <View style={styles.pujaHandle} />
+
+            {/* Cabecera del modal */}
+            <View style={styles.pujaHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pujaLote}>
+                  LOTE {articuloSeleccionado ? String(articuloSeleccionado.numero_lote).padStart(3, '0') : ''}
+                </Text>
+                <Text style={styles.pujaTitulo} numberOfLines={1}>
+                  {articuloSeleccionado?.titulo}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleCerrarPuja} style={styles.pujaCerrarBtn}>
+                <Ionicons name="close" size={22} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {cargandoPujas ? (
+              <View style={styles.pujaCargando}>
+                <ActivityIndicator size="small" color="#000" />
+                <Text style={styles.pujaCargandoTexto}>Cargando información...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Oferta actual */}
+                <View style={styles.pujaOfertaRow}>
+                  <View>
+                    <Text style={styles.pujaOfertaLabel}>OFERTA ACTUAL</Text>
+                    <Text style={styles.pujaOfertaMonto}>
+                      {estadoPujas ? formatearPrecio(estadoPujas.oferta_actual) : formatearPrecio(articuloSeleccionado?.precio_base ?? 0)}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.pujaOfertaLabel}>POSTORES</Text>
+                    <Text style={styles.pujaPostores}>{estadoPujas?.total_participantes ?? 0}</Text>
+                  </View>
+                </View>
+
+                {/* Estado de la subasta */}
+                {estadoPujas && (
+                  <View style={[
+                    styles.pujaEstadoBadge,
+                    estadoPujas.estado_subasta === 'ABIERTA' ? styles.pujaEstadoAbierta : styles.pujaEstadoCerrada
+                  ]}>
+                    <View style={[
+                      styles.pujaEstadoDot,
+                      { backgroundColor: estadoPujas.estado_subasta === 'ABIERTA' ? '#22C55E' : '#EF4444' }
+                    ]} />
+                    <Text style={styles.pujaEstadoTexto}>
+                      {estadoPujas.estado_subasta === 'ABIERTA' ? 'Subasta abierta' : 'Subasta cerrada'}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Historial de pujas (últimas 3) */}
+                {estadoPujas && estadoPujas.historial_pujas.length > 0 && (
+                  <View style={styles.historialContainer}>
+                    <Text style={styles.historialTitulo}>ÚLTIMAS PUJAS</Text>
+                    {estadoPujas.historial_pujas.slice(0, 3).map((puja, idx) => (
+                      <View key={idx} style={styles.historialFila}>
+                        <Text style={styles.historialPostor}>{puja.postor}</Text>
+                        <Text style={styles.historialMonto}>{formatearPrecio(puja.monto)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.pujaSeparador} />
+
+                {/* Feedback de puja exitosa */}
+                {pujaExitosa && (
+                  <View style={styles.pujaExitosaContainer}>
+                    <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
+                    <Text style={styles.pujaExitosaTexto}>¡Puja registrada! Estás ganando.</Text>
+                  </View>
+                )}
+
+                {/* Campo de monto */}
+                {estadoPujas?.estado_subasta === 'ABIERTA' && (
+                  <>
+                    <Text style={styles.pujaInputLabel}>TU OFERTA</Text>
+                    <View style={styles.pujaInputRow}>
+                      <Text style={styles.pujaCurrencySign}>$</Text>
+                      <TextInput
+                        style={styles.pujaInput}
+                        placeholder={`Mín. ${formatearPrecio(montoMinimo)}`}
+                        placeholderTextColor="#999"
+                        keyboardType="numeric"
+                        value={montoPuja}
+                        onChangeText={(text) => {
+                          setMontoPuja(text);
+                          setErrorPuja(null);
+                          setPujaExitosa(false);
+                        }}
+                        editable={!enviandoPuja}
+                      />
+                    </View>
+
+                    {errorPuja && (
+                      <View style={styles.pujaErrorContainer}>
+                        <Ionicons name="alert-circle-outline" size={16} color="#EF4444" />
+                        <Text style={styles.pujaErrorTexto}>{errorPuja}</Text>
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={[styles.pujaConfirmarBtn, enviandoPuja && styles.pujaConfirmarBtnDisabled]}
+                      onPress={handleConfirmarPuja}
+                      disabled={enviandoPuja}
+                    >
+                      {enviandoPuja ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.pujaConfirmarBtnTexto}>CONFIRMAR PUJA</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {estadoPujas?.estado_subasta === 'CERRADA' && (
+                  <View style={styles.pujaCerradaContainer}>
+                    <Text style={styles.pujaCerradaTexto}>Esta subasta está cerrada. No se pueden registrar nuevas pujas.</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -246,138 +488,78 @@ export default function CatalogoScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8F9FA' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F8F9FA',
-  },
-  headerBack: {
-    width: 40,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 4,
-    color: '#000',
-  },
-  headerAction: {
-    width: 40,
-    alignItems: 'flex-end',
-  },
-  busquedaBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    gap: 8,
-  },
-  busquedaInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-    paddingVertical: 4,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8F9FA' },
+  headerBack: { width: 40 },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', letterSpacing: 4, color: '#000' },
+  headerAction: { width: 40, alignItems: 'flex-end' },
+  busquedaBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 8 },
+  busquedaInput: { flex: 1, fontSize: 16, color: '#000', paddingVertical: 4 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 24 },
-  card: {
-    width: '100%',
-    backgroundColor: '#F8F9FA',
-  },
-  imageContainer: {
-    width: '100%',
-    height: 220,
-    backgroundColor: '#EAEAEA',
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
+  card: { width: '100%', backgroundColor: '#F8F9FA' },
+  imageContainer: { width: '100%', height: 220, backgroundColor: '#EAEAEA', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   cardImagen: { width: '100%', height: '100%' },
-  badgeEnVivo: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: '#000',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 2,
-  },
-  badgeEnVivoTexto: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  badgeRestan: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: 'rgba(230, 230, 230, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderTopLeftRadius: 8,
-    minWidth: 90,
-  },
-  badgeRestanLabel: {
-    fontSize: 9,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 2,
-    letterSpacing: 1,
-  },
-  badgeRestanTexto: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  badgeEnVivo: { position: 'absolute', top: 12, left: 12, backgroundColor: '#000', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2 },
+  badgeEnVivoTexto: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  badgeRestan: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(230,230,230,0.85)', paddingHorizontal: 16, paddingVertical: 10, borderTopLeftRadius: 8, minWidth: 90 },
+  badgeRestanLabel: { fontSize: 9, color: '#666', textAlign: 'center', marginBottom: 2, letterSpacing: 1 },
+  badgeRestanTexto: { fontSize: 14, color: '#000', fontWeight: '500', textAlign: 'center' },
   cardBody: { paddingHorizontal: 4 },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  cardTitleContainer: {
-    flex: 1,
-    paddingRight: 16,
-  },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  cardTitleContainer: { flex: 1, paddingRight: 16 },
   loteNumero: { fontSize: 10, fontWeight: '600', color: '#999', letterSpacing: 1, marginBottom: 4 },
   cardTitulo: { fontSize: 16, fontWeight: '700', color: '#000' },
   favoritoBtn: { padding: 4 },
   divider: { height: 1, backgroundColor: '#EEEEEE', marginBottom: 16 },
   cardFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ofertaLabel: { fontSize: 10, color: '#999', fontWeight: '600', letterSpacing: 1, marginBottom: 4, textTransform: 'uppercase' },
+  ofertaLabel: { fontSize: 10, color: '#999', fontWeight: '600', letterSpacing: 1, marginBottom: 4 },
   ofertaMonto: { fontSize: 18, fontWeight: '700', color: '#000' },
   pujarBtn: { backgroundColor: '#000', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 16 },
   pujarBtnTexto: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '80%',
-  },
+  // Modal orden
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '80%' },
   modalTitulo: { fontSize: 16, fontWeight: '700', letterSpacing: 2, marginBottom: 16, textAlign: 'center' },
-  modalOpcion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
+  modalOpcion: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   modalOpcionActiva: {},
   modalOpcionTexto: { fontSize: 15, color: '#666' },
   modalOpcionTextoActiva: { color: '#000', fontWeight: '600' },
+  // Modal puja
+  pujaModalWrapper: { flex: 1, justifyContent: 'flex-end' },
+  pujaModalOverlay: { flex: 1 },
+  pujaModalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingBottom: 36, paddingTop: 12 },
+  pujaHandle: { width: 40, height: 4, backgroundColor: '#E0E0E0', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  pujaHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
+  pujaLote: { fontSize: 10, fontWeight: '600', color: '#999', letterSpacing: 1, marginBottom: 4 },
+  pujaTitulo: { fontSize: 18, fontWeight: '700', color: '#000' },
+  pujaCerrarBtn: { padding: 4, marginLeft: 12 },
+  pujaCargando: { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  pujaCargandoTexto: { color: '#999', fontSize: 14 },
+  pujaOfertaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 },
+  pujaOfertaLabel: { fontSize: 10, fontWeight: '600', color: '#999', letterSpacing: 1, marginBottom: 4 },
+  pujaOfertaMonto: { fontSize: 28, fontWeight: '700', color: '#000' },
+  pujaPostores: { fontSize: 22, fontWeight: '700', color: '#000' },
+  pujaEstadoBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 16 },
+  pujaEstadoAbierta: { backgroundColor: '#F0FDF4' },
+  pujaEstadoCerrada: { backgroundColor: '#FEF2F2' },
+  pujaEstadoDot: { width: 8, height: 8, borderRadius: 4 },
+  pujaEstadoTexto: { fontSize: 13, fontWeight: '600', color: '#333' },
+  historialContainer: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 14, marginBottom: 16 },
+  historialTitulo: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 10 },
+  historialFila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
+  historialPostor: { fontSize: 14, color: '#555' },
+  historialMonto: { fontSize: 14, fontWeight: '600', color: '#000' },
+  pujaSeparador: { height: 1, backgroundColor: '#EEEEEE', marginBottom: 20 },
+  pujaExitosaContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 16 },
+  pujaExitosaTexto: { color: '#16A34A', fontSize: 14, fontWeight: '600' },
+  pujaInputLabel: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 8 },
+  pujaInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#000', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12 },
+  pujaCurrencySign: { fontSize: 20, fontWeight: '700', color: '#000', marginRight: 8 },
+  pujaInput: { flex: 1, fontSize: 22, fontWeight: '700', color: '#000', padding: 0 },
+  pujaErrorContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  pujaErrorTexto: { color: '#EF4444', fontSize: 13, flex: 1 },
+  pujaConfirmarBtn: { backgroundColor: '#000', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
+  pujaConfirmarBtnDisabled: { backgroundColor: '#555' },
+  pujaConfirmarBtnTexto: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+  pujaCerradaContainer: { backgroundColor: '#FEF2F2', padding: 16, borderRadius: 12 },
+  pujaCerradaTexto: { color: '#DC2626', fontSize: 14, textAlign: 'center' },
 });
