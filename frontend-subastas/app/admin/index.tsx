@@ -487,7 +487,7 @@ export default function AdminPanel() {
   if (!token) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.emptyText}>Iniciá sesión para ver el panel admin.</Text>
+        <Text style={styles.emptyStateText}>Iniciá sesión para ver el panel admin.</Text>
       </SafeAreaView>
     );
   }
