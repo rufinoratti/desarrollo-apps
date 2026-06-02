@@ -221,6 +221,12 @@ const store = {
     /** Solicitudes de artículos para subastar. */
     articleRequests: [],
 
+    /** Catálogos de subastas. */
+    catalogos: [],
+
+    /** Items de catálogo (productos aprobados). */
+    itemscatalogo: [],
+
     /** Productos publicados (pendientes de evaluación). */
     productos: [],
 
@@ -246,7 +252,8 @@ const counters = {
     registroTemp: 1,
     subasta: 5,
     producto: 1,
-    catalogo: 1
+    catalogo: 1,
+    item: 1
 };
 
 /**

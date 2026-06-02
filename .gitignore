@@ -1,3 +1,10 @@
+<<<<<<< HEAD
 backend-subasta/.env
 backend-subasta/node_modules/
 frontend-subastas/.env
+=======
+node_modules/
+.env
+.env.local
+.env.*.local
+>>>>>>> cb8760a7049f3ff7a7f6c93a97bffab9407044ec

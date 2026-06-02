@@ -15,14 +15,6 @@ interface OpcionItem {
   nombre: string;
 }
 
-interface SubastaItem {
-  id: number;
-  nombre: string;
-  fecha?: string | null;
-  hora?: string | null;
-  catalogo_id?: number | null;
-}
-
 export default function AgregarProductoScreen() {
   const { token, removeToken } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -30,23 +22,15 @@ export default function AgregarProductoScreen() {
 
   const [revisores, setRevisores] = useState<OpcionItem[]>([]);
   const [seguros, setSeguros] = useState<OpcionItem[]>([]);
-  const [categorias, setCategorias] = useState<OpcionItem[]>([]);
-  const [subastas, setSubastas] = useState<SubastaItem[]>([]);
 
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
-  const [precioBase, setPrecioBase] = useState('');
-  const [comision, setComision] = useState('');
+  const [precioSugerido, setPrecioSugerido] = useState('');
 
   const [revisorId, setRevisorId] = useState<number | null>(null);
   const [revisorLabel, setRevisorLabel] = useState('');
   const [seguroId, setSeguroId] = useState<number | null>(null);
   const [seguroLabel, setSeguroLabel] = useState('');
-  const [categoriaId, setCategoriaId] = useState<number | null>(null);
-  const [categoriaLabel, setCategoriaLabel] = useState('');
-  const [subastaId, setSubastaId] = useState<number | null>(null);
-  const [subastaLabel, setSubastaLabel] = useState('');
-  const [catalogoId, setCatalogoId] = useState<number | null>(null);
 
   const [imagenes, setImagenes] = useState<{ uri: string; name: string; type: string }[]>([]);
 
@@ -68,29 +52,10 @@ export default function AgregarProductoScreen() {
       const data = await res.json();
       setRevisores(data.revisores || []);
       setSeguros(data.seguros || []);
-      setCategorias(data.categorias || []);
     } catch {
       // Silencioso
     } finally {
       setLoading(false);
-    }
-  }, [token, removeToken]);
-
-  const fetchSubastas = useCallback(async (tematicaId: number) => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_URL}/api/mis-bienes/subastas?tematica=${tematicaId}` , {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.status === 401) {
-        await removeToken();
-        return;
-      }
-      if (!res.ok) return;
-      const data = await res.json();
-      setSubastas(data || []);
-    } catch {
-      // Silencioso
     }
   }, [token, removeToken]);
 
@@ -130,15 +95,11 @@ export default function AgregarProductoScreen() {
     return (
       nombre.trim() &&
       descripcion.trim() &&
-      precioBase.trim() &&
-      comision.trim() &&
+      precioSugerido.trim() &&
       revisorId &&
-      categoriaId &&
-      subastaId &&
-      (catalogoId || subastas.find((s) => s.id === subastaId)?.catalogo_id) &&
       imagenes.length > 0
     );
-  }, [nombre, descripcion, precioBase, comision, revisorId, categoriaId, subastaId, catalogoId, subastas, imagenes]);
+  }, [nombre, descripcion, precioSugerido, revisorId, imagenes]);
 
   const handleSubmit = async () => {
     if (!token) return;
@@ -147,23 +108,14 @@ export default function AgregarProductoScreen() {
       return;
     }
 
-    const resolvedCatalogo = catalogoId || subastas.find((s) => s.id === subastaId)?.catalogo_id || null;
-    if (!resolvedCatalogo) {
-      Alert.alert('Falta subasta', 'Seleccioná una subasta válida.');
-      return;
-    }
-
     setSaving(true);
     try {
       const formData = new FormData();
       formData.append('descripcioncatalogo', nombre.trim());
       formData.append('descripcioncompleta', descripcion.trim());
-      formData.append('preciobase', precioBase.trim());
-      formData.append('comision', comision.trim());
+      formData.append('preciosugerido', precioSugerido.trim());
       formData.append('revisor', String(revisorId));
       formData.append('seguro', seguroId ? String(seguroId) : '');
-      formData.append('subasta_id', String(subastaId));
-      formData.append('catalogo_id', String(resolvedCatalogo));
 
       imagenes.forEach((img) => {
         formData.append('fotos', img as any);
@@ -245,17 +197,10 @@ export default function AgregarProductoScreen() {
             multiline
           />
           <Input
-            label="Precio base"
-            value={precioBase}
-            onChangeText={setPrecioBase}
+            label="Precio sugerido"
+            value={precioSugerido}
+            onChangeText={setPrecioSugerido}
             placeholder="Ej: 150000"
-            keyboardType="numeric"
-          />
-          <Input
-            label="Comisión (%)"
-            value={comision}
-            onChangeText={setComision}
-            placeholder="Ej: 10"
             keyboardType="numeric"
           />
         </View>
@@ -280,38 +225,6 @@ export default function AgregarProductoScreen() {
             onSelect={(id, label) => {
               setSeguroId(id);
               setSeguroLabel(label);
-            }}
-          />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Subasta</Text>
-          <Select
-            label="Categoría"
-            value={categoriaLabel}
-            options={categorias}
-            placeholder="Seleccionar categoría"
-            onSelect={(id, label) => {
-              setCategoriaId(id);
-              setCategoriaLabel(label);
-              setSubastaId(null);
-              setSubastaLabel('');
-              setCatalogoId(null);
-              setSubastas([]);
-              fetchSubastas(id);
-            }}
-          />
-          <Select
-            label="Subasta"
-            value={subastaLabel}
-            options={subastas}
-            placeholder="Seleccionar subasta"
-            disabled={!categoriaId}
-            onSelect={(id, label) => {
-              setSubastaId(id);
-              setSubastaLabel(label);
-              const cat = subastas.find((s) => s.id === id)?.catalogo_id || null;
-              setCatalogoId(cat);
             }}
           />
         </View>
