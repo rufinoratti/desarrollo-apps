@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert
+  Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert, Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -25,6 +25,104 @@ interface CatalogoSubastaInfo {
   estado: string;
   fecha_inicio?: string | null;
   fecha_fin?: string | null;
+  ubicacion?: string | null;
+  cantidad_articulos?: number | null;
+}
+
+function getDisplayStatus(item: CatalogoSubastaInfo): string {
+  if (String(item.estado).toLowerCase() === 'cerrada') return 'FINALIZADA';
+  const now = Date.now();
+  const start = item.fecha_inicio ? new Date(item.fecha_inicio).getTime() : 0;
+  const end = item.fecha_fin ? new Date(item.fecha_fin).getTime() : 0;
+  if (start && now < start) return 'PRÓXIMAMENTE';
+  if (end && now >= end) return 'FINALIZADA';
+  return 'EN VIVO';
+}
+
+const BADGE_COLORS: Record<string, string> = {
+  'EN VIVO': '#059669',
+  'PRÓXIMAMENTE': '#2563EB',
+  'FINALIZADA': '#6B7280',
+};
+
+function StatusBadge({ estado }: { estado: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (estado !== 'EN VIVO') return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [estado, pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.estadoBadge,
+        {
+          backgroundColor: BADGE_COLORS[estado] || '#000',
+          opacity: estado === 'EN VIVO' ? pulseAnim : 1,
+        },
+      ]}
+    >
+      <Text style={styles.estadoBadgeTexto}>{estado}</Text>
+    </Animated.View>
+  );
+}
+
+function CatalogoHeader({ subastaInfo, articulosCount }: { subastaInfo: CatalogoSubastaInfo; articulosCount: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const estado = getDisplayStatus(subastaInfo);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const fecha = subastaInfo.fecha_inicio
+    ? new Date(subastaInfo.fecha_inicio).toLocaleDateString('es-AR', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : null;
+
+  return (
+    <Animated.View style={[styles.headerSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <StatusBadge estado={estado} />
+      <Text style={styles.headerTitulo} numberOfLines={2}>{subastaInfo.titulo}</Text>
+      <View style={styles.headerMeta}>
+        {articulosCount > 0 && (
+          <View style={styles.headerMetaItem}>
+            <Text style={styles.headerMetaNum}>{articulosCount}</Text>
+            <Text style={styles.headerMetaLabel}>artículos</Text>
+          </View>
+        )}
+        {subastaInfo.ubicacion && (
+          <>
+            <View style={styles.headerMetaDot} />
+            <View style={styles.headerMetaItem}>
+              <Text style={styles.headerMetaLabel}>{subastaInfo.ubicacion}</Text>
+            </View>
+          </>
+        )}
+        {fecha && (
+          <>
+            <View style={styles.headerMetaDot} />
+            <View style={styles.headerMetaItem}>
+              <Text style={styles.headerMetaLabel}>{fecha}</Text>
+            </View>
+          </>
+        )}
+      </View>
+    </Animated.View>
+  );
 }
 
 interface EstadoPujas {
@@ -354,16 +452,7 @@ export default function CatalogoScreen() {
         </View>
       )}
 
-      {subastaInfo && (
-        <View style={styles.subastaHeader}>
-          <Text style={styles.subastaHeaderEyebrow}>SUBASTA</Text>
-          <Text style={styles.subastaTitulo} numberOfLines={2}>{subastaInfo.titulo}</Text>
-          <View style={styles.subastaMetaRow}>
-            <Text style={styles.subastaMetaLabel}>ARTÍCULOS</Text>
-            <Text style={styles.subastaMetaValue}>{articulos.length}</Text>
-          </View>
-        </View>
-      )}
+      {subastaInfo && <CatalogoHeader subastaInfo={subastaInfo} articulosCount={articulos.length} />}
 
       <FlatList
         data={articulos}
@@ -549,12 +638,21 @@ const styles = StyleSheet.create({
   busquedaBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 8 },
   busquedaInput: { flex: 1, fontSize: 16, color: '#000', paddingVertical: 4 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 24 },
-  subastaHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, marginHorizontal: 16, marginBottom: 8, backgroundColor: '#F5F0E8', borderRadius: 12, borderWidth: 1, borderColor: '#E8DFCF' },
-  subastaHeaderEyebrow: { fontSize: 10, fontWeight: '700', color: '#8B6F47', letterSpacing: 2, marginBottom: 6 },
-  subastaTitulo: { fontSize: 18, fontWeight: '700', color: '#2A1F14', marginBottom: 8 },
-  subastaMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  subastaMetaLabel: { fontSize: 9, fontWeight: '700', color: '#8B6F47', letterSpacing: 1 },
-  subastaMetaValue: { fontSize: 12, fontWeight: '700', color: '#2A1F14' },
+  headerSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  estadoBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  estadoBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  headerTitulo: { fontSize: 24, fontWeight: '700', color: '#000', marginBottom: 10 },
+  headerMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  headerMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  headerMetaNum: { fontSize: 14, fontWeight: '700', color: '#000' },
+  headerMetaLabel: { fontSize: 12, color: '#888', fontWeight: '500' },
+  headerMetaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CCC', marginHorizontal: 4 },
   card: { width: '100%', backgroundColor: '#F8F9FA' },
   imageContainer: { width: '100%', height: 220, backgroundColor: '#EAEAEA', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   cardImagen: { width: '100%', height: '100%' },
