@@ -79,9 +79,6 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
 
         if (estadoDB) {
             query = query.eq('estado', estadoDB);
-        } else if (!estado) {
-            // Por defecto traemos las abiertas
-            query = query.eq('estado', 'abierta');
         }
 
         // Ordenamos por la fecha de la base de datos

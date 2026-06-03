@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -22,6 +22,8 @@ type Subasta = {
   cantidad_articulos?: number;
   ubicacion?: string;
   estado?: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
 };
 
 const Skeleton = ({ width, height, borderRadius, style }: any) => {
@@ -38,6 +40,152 @@ const Skeleton = ({ width, height, borderRadius, style }: any) => {
 
   return <Animated.View style={[{ width, height, borderRadius, backgroundColor: '#E0E0E0', opacity: anim }, style]} />;
 };
+
+function getDisplayStatus(item: Subasta): string {
+  if (String(item.estado).toLowerCase() === 'cerrada') return 'FINALIZADA';
+
+  const now = Date.now();
+  const start = item.fecha_inicio ? new Date(item.fecha_inicio as string).getTime() : 0;
+  const end = item.fecha_fin ? new Date(item.fecha_fin as string).getTime() : 0;
+
+  if (start && now < start) return 'PRÓXIMAMENTE';
+  if (end && now >= end) return 'FINALIZADA';
+  return 'EN VIVO';
+}
+
+const BADGE_COLORS = {
+  'EN VIVO': '#059669',
+  'PRÓXIMAMENTE': '#2563EB',
+  'FINALIZADA': '#6B7280',
+};
+
+function StatusBadge({ estado }: { estado: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (estado !== 'EN VIVO') return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [estado, pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: (BADGE_COLORS as any)[estado] || '#000',
+          opacity: estado === 'EN VIVO' ? pulseAnim : 1,
+        },
+      ]}
+    >
+      <Text style={styles.badgeText}>{estado}</Text>
+    </Animated.View>
+  );
+}
+
+function SubastaCard({ item, index }: { item: Subasta; index: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
+  const estado = getDisplayStatus(item);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 450,
+        delay: Math.min(index * 70, 350),
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 450,
+        delay: Math.min(index * 70, 350),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const rankOf = (lvl?: string | number) => {
+    if (!lvl && lvl !== 0) return 1;
+    const s = String(lvl)
+      .trim()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+    const digits = s.match(/\d+/);
+    if (digits?.[0]) {
+      const num = Number(digits[0]);
+      if (num >= 1 && num <= 5) return num;
+    }
+    if (s.includes('platino') || s.includes('platinum')) return 5;
+    if (s.includes('oro')) return 4;
+    if (s.includes('plata')) return 3;
+    if (s.includes('especial')) return 2;
+    if (s.includes('comun') || s.includes('base')) return 1;
+    return 1;
+  };
+
+  const { nivel } = useAuth();
+  const nivelUsuario = rankOf(nivel || 'base');
+  const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
+  const nivelReq = rankOf(rawReq);
+  const bloqueada = nivelUsuario < nivelReq && estado === 'EN VIVO';
+
+  return (
+    <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.imageContainer}>
+        <Image
+          source={{ uri: item.imagen_portada || item.imagen }}
+          style={styles.cardImage}
+          blurRadius={bloqueada ? 6 : 0}
+        />
+        {bloqueada && (
+          <View style={styles.overlayBloqueada}>
+            <Ionicons name="lock-closed" size={28} color="#fff" />
+            <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
+          </View>
+        )}
+        {!bloqueada && <StatusBadge estado={estado} />}
+        {!bloqueada && estado === 'EN VIVO' && (
+          <CountdownBadge
+            fechaInicio={(item as any).fecha_inicio}
+            fechaFin={(item as any).fecha_fin}
+          />
+        )}
+        {!bloqueada && estado === 'PRÓXIMAMENTE' && (
+          <CountdownBadge
+            fechaInicio={(item as any).fecha_inicio}
+            fechaFin={(item as any).fecha_fin}
+          />
+        )}
+      </View>
+
+      <Text style={styles.cardTitle}>{item.titulo ?? ''}</Text>
+      <Text style={styles.cardSubtitle}>{item.cantidad_articulos ?? item.articulos ?? 0} artículos — {item.ubicacion ?? ''}</Text>
+
+      <TouchableOpacity
+        style={[styles.cardButton, bloqueada && styles.cardButtonDisabled]}
+        onPress={() => {
+          if (bloqueada) return;
+          const subastaId = item.subasta_id ?? item.id;
+          if (!subastaId) return;
+          router.push({ pathname: '/catalogo/[id]', params: { id: String(subastaId), titulo: item.titulo ?? '' } } as any);
+        }}
+        disabled={bloqueada}
+      >
+        <Text style={[styles.cardButtonText, bloqueada && styles.cardButtonTextDisabled]}>
+          {estado === 'FINALIZADA' ? 'VER SUBASTA' : 'VER CATÁLOGO'}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export default function Home() {
   const { nombre, token, removeToken, isLoading, nivel } = useAuth();
@@ -128,112 +276,6 @@ const fetchCategorias = async () => {
     );
   };
 
-  const renderSubasta = ({ item }: { item: Subasta }) => {
-    // Determina el ranking del nivel (maneja distintas convenciones: BASE/ORO/PLATINO o comun/oro/platino)
-    const rankOf = (lvl?: string | number) => {
-      if (!lvl && lvl !== 0) return 1;
-      const s = String(lvl)
-        .trim()
-        .normalize('NFD')
-        .replace(/\p{Diacritic}/gu, '')
-        .toLowerCase();
-      const digits = s.match(/\d+/);
-      if (digits?.[0]) {
-        const num = Number(digits[0]);
-        if (num >= 1 && num <= 5) return num;
-      }
-      if (s.includes('platino') || s.includes('platinum')) return 5;
-      if (s.includes('oro')) return 4;
-      if (s.includes('plata')) return 3;
-      if (s.includes('especial')) return 2;
-      if (s.includes('comun') || s.includes('base')) return 1;
-      switch (s) {
-        case 'base':
-        case 'comun':
-        case '1':
-          return 1;
-        case 'especial':
-        case '2':
-          return 2;
-        case 'plata':
-        case '3':
-          return 3;
-        case 'oro':
-        case '4':
-          return 4;
-        case 'platino':
-        case 'platinum':
-        case '5':
-          return 5;
-        case 'oro':
-          return 4;
-        case 'platino':
-          return 5;
-        // Niveles en mayúscula del mock-server
-        case 'base'.toUpperCase():
-        case 'oro'.toUpperCase():
-        case 'platino'.toUpperCase():
-          return rankOf(s.toLowerCase());
-        default:
-          // Intentar mapear claves comunes en mayúscula (BASE, ORO, PLATINO)
-          if (s === 'base') return 1;
-          if (s === 'oro') return 4;
-          if (s === 'platino') return 5;
-          return 1;
-      }
-    };
-
-    const nivelUsuario = rankOf(nivel || 'base');
-    const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
-    const nivelReq = rankOf(rawReq);
-    const bloqueada = nivelUsuario < nivelReq;
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: item.imagen_portada || item.imagen }}
-            style={styles.cardImage}
-            blurRadius={bloqueada ? 6 : 0}
-          />
-          {bloqueada && (
-            <View style={styles.overlayBloqueada}>
-              <Ionicons name="lock-closed" size={28} color="#fff" />
-              <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
-            </View>
-          )}
-          {!bloqueada && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{item.estado ?? ''}</Text>
-            </View>
-          )}
-          {!bloqueada && (
-            <CountdownBadge
-              fechaInicio={(item as any).fecha_inicio}
-              fechaFin={(item as any).fecha_fin}
-            />
-          )}
-        </View>
-
-        <Text style={styles.cardTitle}>{item.titulo ?? ''}</Text>
-        <Text style={styles.cardSubtitle}>{item.cantidad_articulos ?? item.articulos ?? 0} articulos — {item.ubicacion ?? ''}</Text>
-
-        <TouchableOpacity 
-          style={[styles.cardButton, bloqueada && styles.cardButtonDisabled]}
-          onPress={() => {
-            if (bloqueada) return;
-            const subastaId = item.subasta_id ?? item.id;
-            if (!subastaId) return;
-            router.push({ pathname: '/catalogo/[id]', params: { id: String(subastaId), titulo: item.titulo ?? '' } } as any);
-          }}
-          disabled={bloqueada}
-        >
-          <Text style={[styles.cardButtonText, bloqueada && styles.cardButtonTextDisabled]}>VER CATÁLOGO</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -249,7 +291,7 @@ const fetchCategorias = async () => {
       <FlatList
         data={subastas}
         keyExtractor={(item, index) => String(item?.subasta_id ?? item?.id ?? index)}
-        renderItem={renderSubasta}
+        renderItem={({ item, index }) => <SubastaCard item={item} index={index} />}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
@@ -66,6 +66,54 @@ interface SubastaItem {
   estado: string;
   nivel_requerido: string;
   categoria_id: number;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+}
+
+function getDisplayStatus(item: SubastaItem): string {
+  if (String(item.estado).toLowerCase() === 'cerrada') return 'FINALIZADA';
+  const now = Date.now();
+  const start = item.fecha_inicio ? new Date(item.fecha_inicio).getTime() : 0;
+  const end = item.fecha_fin ? new Date(item.fecha_fin).getTime() : 0;
+  if (start && now < start) return 'PRÓXIMAMENTE';
+  if (end && now >= end) return 'FINALIZADA';
+  return 'EN VIVO';
+}
+
+const BADGE_COLORS: Record<string, string> = {
+  'EN VIVO': '#059669',
+  'PRÓXIMAMENTE': '#2563EB',
+  'FINALIZADA': '#6B7280',
+};
+
+function StatusBadge({ estado }: { estado: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (estado !== 'EN VIVO') return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [estado, pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: BADGE_COLORS[estado] || '#000',
+          opacity: estado === 'EN VIVO' ? pulseAnim : 1,
+        },
+      ]}
+    >
+      <Text style={styles.badgeTexto}>{estado}</Text>
+    </Animated.View>
+  );
 }
 
 export default function SubastasScreen() {
@@ -157,14 +205,28 @@ export default function SubastasScreen() {
 
   const nivelActual = rankOf(nivel || 'base');
 
-  const renderSubastaCard = ({ item }: { item: SubastaItem }) => {
+  function SubastaCard({ item, index }: { item: SubastaItem; index: number }) {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(24)).current;
+    const estado = getDisplayStatus(item);
+
+    useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1, duration: 450, delay: Math.min(index * 70, 350), useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0, duration: 450, delay: Math.min(index * 70, 350), useNativeDriver: true,
+        }),
+      ]).start();
+    }, []);
+
     const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
     const nivelRequerido = rankOf(rawReq);
-    const bloqueada = nivelActual < nivelRequerido;
-    const esEnVivo = item.estado === 'EN_VIVO';
+    const bloqueada = nivelActual < nivelRequerido && estado === 'EN VIVO';
 
     return (
-      <View style={styles.card}>
+      <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
@@ -189,16 +251,8 @@ export default function SubastasScreen() {
               <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
             </View>
           )}
-          {esEnVivo ? (
-            <View style={styles.badgeVivo}>
-              <Text style={styles.badgeVivoTexto}>EN VIVO</Text>
-            </View>
-          ) : (
-            <View style={styles.badgeProximamente}>
-              <Text style={styles.badgeProximamenteTexto}>PRÓXIMAMENTE</Text>
-            </View>
-          )}
-          {!bloqueada && (
+          {!bloqueada && <StatusBadge estado={estado} />}
+          {!bloqueada && (estado === 'EN VIVO' || estado === 'PRÓXIMAMENTE') && (
             <CountdownBadge
               fechaInicio={(item as any).fecha_inicio}
               fechaFin={(item as any).fecha_fin}
@@ -221,12 +275,14 @@ export default function SubastasScreen() {
             }}
             disabled={bloqueada}
           >
-            <Text style={[styles.botonCatalogoTexto, bloqueada && styles.botonCatalogoTextoDisabled]}>VER CATÁLOGO</Text>
+            <Text style={[styles.botonCatalogoTexto, bloqueada && styles.botonCatalogoTextoDisabled]}>
+              {estado === 'FINALIZADA' ? 'VER SUBASTA' : 'VER CATÁLOGO'}
+            </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
     );
-  };
+  }
 
   const renderFooter = () => {
     if (!cargandoMas) return null;
@@ -311,7 +367,7 @@ export default function SubastasScreen() {
       <FlatList
         data={subastas}
         keyExtractor={(item, index) => String(item?.subasta_id ?? item?.id ?? index)}
-        renderItem={renderSubastaCard}
+        renderItem={({ item, index }) => <SubastaCard item={item} index={index} />}
         contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
@@ -412,26 +468,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
   },
-  badgeVivo: {
+  badge: {
     position: 'absolute',
     top: 12,
     right: 12,
-    backgroundColor: '#000',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  badgeVivoTexto: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  badgeProximamente: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: '#FFF',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  badgeProximamenteTexto: { color: '#000', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  badgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   cardBody: { paddingTop: 12, gap: 4 },
   cardTitulo: { fontSize: 18, fontWeight: '700', color: '#000' },
   cardSubtitulo: { fontSize: 11, color: '#666', marginBottom: 8 },
