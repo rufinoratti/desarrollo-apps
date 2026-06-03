@@ -228,26 +228,6 @@ const validateMontoRules = ({ montoOfertado, ofertaActual, precioBase, categoria
     }
 };
 
-const validarExclusividadSalaLocal = ({ clienteId, subastaIdActual }) => {
-    const activeSubastaIds = new Set(
-        (store.subastas || [])
-            .filter((s) => String(s.estado || '').toUpperCase() === 'EN_VIVO')
-            .map((s) => String(s.id))
-    );
-
-    const userBidsOnActive = (store.bids || []).filter(
-        (b) => String(b.usuario_id) === String(clienteId) && activeSubastaIds.has(String(b.subasta_id))
-    );
-
-    const hasOtherRoom = userBidsOnActive.some((b) => String(b.subasta_id) !== String(subastaIdActual));
-
-    if (hasOtherRoom) {
-        const err = new AppError('Ya estás participando en otra subasta activa', 403);
-        err.codigo = 'USUARIO_EN_OTRA_SALA';
-        throw err;
-    }
-};
-
 const realizarPujaLocal = async ({ authUser, payload }) => {
     const { item_id, monto_ofertado } = payload || {};
     if (!item_id || monto_ofertado === undefined) {
@@ -276,8 +256,6 @@ const realizarPujaLocal = async ({ authUser, payload }) => {
     if (mediosVerificados.length === 0) {
         throw new AppError('Sin medio de pago verificado', 403);
     }
-
-    validarExclusividadSalaLocal({ clienteId: user.id, subastaIdActual: subasta.id });
 
     const itemBids = (store.bids || []).filter((b) => String(b.item_id) === String(item.id));
     const ofertaActual = getOfertaActualFromList(itemBids, item.precio_base);
@@ -380,37 +358,6 @@ const obtenerContextoItemSupabase = async (itemIdNum) => {
     if (!subasta) throw new AppError('Artículo no encontrado o subasta cerrada', 404);
 
     return { item, subasta };
-};
-
-const validarExclusividadSalaSupabase = async ({ clienteId, subastaIdActual }) => {
-    const { data: asistentes, error: asError } = await supabase
-        .from('asistentes')
-        .select('subasta')
-        .eq('cliente', clienteId)
-        .neq('subasta', subastaIdActual);
-
-    if (asError) {
-        throw new AppError('Error al validar exclusividad de sala: ' + asError.message, 500);
-    }
-
-    const otrasSubastas = [...new Set((asistentes || []).map((a) => a.subasta))];
-    if (!otrasSubastas.length) return;
-
-    const { data: abiertas, error: abiertasError } = await supabase
-        .from('subastas')
-        .select('identificador')
-        .in('identificador', otrasSubastas)
-        .eq('estado', 'abierta');
-
-    if (abiertasError) {
-        throw new AppError('Error al validar exclusividad de sala: ' + abiertasError.message, 500);
-    }
-
-    if ((abiertas || []).length > 0) {
-        const err = new AppError('Ya estás participando en otra subasta activa', 403);
-        err.codigo = 'USUARIO_EN_OTRA_SALA';
-        throw err;
-    }
 };
 
 const getOfertaActualSupabase = async (itemIdNum, precioBase) => {
@@ -519,11 +466,6 @@ const realizarPujaSupabase = async ({ authUser, payload }) => {
     if ((verifiedCount || 0) === 0) {
         throw new AppError('Sin medio de pago verificado', 403);
     }
-
-    await validarExclusividadSalaSupabase({
-        clienteId,
-        subastaIdActual: subasta.identificador
-    });
 
     const ofertaActual = await getOfertaActualSupabase(itemIdNum, item.preciobase);
 
@@ -637,7 +579,7 @@ const obtenerPujasActuales = async ({ authUser }) => {
 
     const { data: items } = await supabase
         .from('itemscatalogo')
-        .select('identificador, preciobase, catalogo')
+        .select('identificador, preciobase, catalogo, producto')
         .in('identificador', itemIds);
 
     const itemsMap = new Map((items || []).map((i) => [i.identificador, i]));
@@ -711,8 +653,8 @@ const obtenerPujasActuales = async ({ authUser }) => {
             monto_ofertado: Number(p.importe),
             monto_actual: Number(p.importe),
             es_ganadora: true,
-            tiempo_restante: 'EN_VIVO',
-            estado_subasta: 'EN_VIVO'
+            tiempo_restante: 'EN VIVO',
+            estado_subasta: 'EN VIVO'
         });
     }
 
