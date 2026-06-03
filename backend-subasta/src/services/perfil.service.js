@@ -372,16 +372,9 @@ const obtenerEstadisticasSupabase = async (authUser) => {
     if (pujasError) throw new AppError('Error al obtener estadísticas: ' + pujasError.message, 500);
 
     const totalPujas = (pujasUsuarioRows || []).length;
-    const lotesGanados = (pujasUsuarioRows || []).filter((p) => String(p.ganador) === 'si').length;
-
-    const { data: comprasRows, error: comprasError } = await supabase
-        .from('registrodesubasta')
-        .select('importe')
-        .eq('cliente', clienteId);
-
-    if (comprasError) throw new AppError('Error al obtener estadísticas: ' + comprasError.message, 500);
-
-    const inversionTotal = (comprasRows || []).reduce((acc, row) => acc + Number(row.importe || 0), 0);
+    const ganadas = (pujasUsuarioRows || []).filter((p) => String(p.ganador) === 'si');
+    const lotesGanados = ganadas.length;
+    const inversionTotal = ganadas.reduce((acc, p) => acc + Number(p.importe || 0), 0);
 
     return {
         subastas_participadas: Number(subastasParticipadas || 0),
