@@ -609,9 +609,189 @@ const cerrarSubastaYLiquidar = async () => {
     return { mensaje: 'Proceso de cierre disponible para integración transaccional' };
 };
 
+// ============================================================
+// PUJAS ACTUALES DEL USUARIO
+// ============================================================
+
+const obtenerPujasActuales = async ({ authUser }) => {
+    if (!authUser) throw new AppError('No autenticado', 401);
+
+    const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { data: asistencias } = await supabase
+        .from('asistentes')
+        .select('identificador')
+        .eq('cliente', clienteId);
+
+    const asistenciaIds = (asistencias || []).map((a) => a.identificador);
+    if (!asistenciaIds.length) return { pujas: [] };
+
+    const { data: pujos } = await supabase
+        .from('pujos')
+        .select('identificador, item, importe')
+        .in('asistente', asistenciaIds);
+
+    if (!pujos?.length) return { pujas: [] };
+
+    const itemIds = [...new Set(pujos.map((p) => p.item))];
+
+    const { data: items } = await supabase
+        .from('itemscatalogo')
+        .select('identificador, preciobase, catalogo')
+        .in('identificador', itemIds);
+
+    const itemsMap = new Map((items || []).map((i) => [i.identificador, i]));
+    const catalogoIds = [...new Set((items || []).map((i) => i.catalogo).filter(Boolean))];
+
+    let subastasActivas = new Set();
+    if (catalogoIds.length) {
+        const { data: catalogos } = await supabase
+            .from('catalogos')
+            .select('identificador, subasta')
+            .in('identificador', catalogoIds);
+
+        const subastaIds = [...new Set((catalogos || []).map((c) => c.subasta).filter(Boolean))];
+
+        if (subastaIds.length) {
+            const { data: subastas } = await supabase
+                .from('subastas')
+                .select('identificador')
+                .in('identificador', subastaIds)
+                .eq('estado', 'abierta');
+            subastasActivas = new Set((subastas || []).map((s) => s.identificador));
+        }
+    }
+
+    const productIds = [...new Set((items || []).map((i) => i.producto).filter(Boolean))];
+
+    const { data: productos } = await supabase
+        .from('productos')
+        .select('identificador, descripcioncatalogo')
+        .in('identificador', productIds);
+
+    const productosMap = new Map((productos || []).map((p) => [p.identificador, p]));
+
+    const { data: fotos } = await supabase
+        .from('fotos')
+        .select('producto, foto_url')
+        .in('producto', productIds);
+
+    const fotosMap = new Map();
+    for (const f of fotos || []) {
+        if (!fotosMap.has(f.producto)) fotosMap.set(f.producto, []);
+        fotosMap.get(f.producto).push(f.foto_url);
+    }
+
+    const pujas = [];
+    for (const p of pujos || []) {
+        const item = itemsMap.get(p.item);
+        if (!item) continue;
+
+        let subastaId = null;
+        if (item.catalogo) {
+            const { data: cat } = await supabase
+                .from('catalogos')
+                .select('subasta')
+                .eq('identificador', item.catalogo)
+                .maybeSingle();
+            if (cat) subastaId = cat.subasta;
+        }
+
+        if (!subastaId || !subastasActivas.has(subastaId)) continue;
+
+        const producto = productosMap.get(item.producto);
+
+        pujas.push({
+            puja_id: String(p.identificador),
+            item_id: String(p.item),
+            subasta_id: String(subastaId),
+            numero_lote: String(p.item).padStart(3, '0'),
+            titulo: producto?.descripcioncatalogo || `Ítem #${p.item}`,
+            imagen: fotosMap.get(item.producto)?.[0] || '',
+            monto_ofertado: Number(p.importe),
+            monto_actual: Number(p.importe),
+            es_ganadora: true,
+            tiempo_restante: 'EN_VIVO',
+            estado_subasta: 'EN_VIVO'
+        });
+    }
+
+    return { pujas };
+};
+
+// ============================================================
+// PUJAS GANADAS DEL USUARIO
+// ============================================================
+
+const obtenerPujasGanadas = async ({ authUser }) => {
+    if (!authUser) throw new AppError('No autenticado', 401);
+
+    const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { data: asistencias } = await supabase
+        .from('asistentes')
+        .select('identificador')
+        .eq('cliente', clienteId);
+
+    const asistenciaIds = (asistencias || []).map((a) => a.identificador);
+    if (!asistenciaIds.length) return { items: [] };
+
+    const { data: pujos } = await supabase
+        .from('pujos')
+        .select('identificador, item, importe')
+        .in('asistente', asistenciaIds)
+        .eq('ganador', 'si');
+
+    if (!pujos?.length) return { items: [] };
+
+    const itemIds = [...new Set(pujos.map((p) => p.item))];
+
+    const { data: items } = await supabase
+        .from('itemscatalogo')
+        .select('identificador, producto')
+        .in('identificador', itemIds);
+
+    const itemsMap = new Map((items || []).map((i) => [i.identificador, i]));
+    const productIds = [...new Set((items || []).map((i) => i.producto).filter(Boolean))];
+
+    const { data: productos } = await supabase
+        .from('productos')
+        .select('identificador, descripcioncatalogo')
+        .in('identificador', productIds);
+
+    const productosMap = new Map((productos || []).map((p) => [p.identificador, p]));
+
+    const { data: fotos } = await supabase
+        .from('fotos')
+        .select('producto, foto_url')
+        .in('producto', productIds);
+
+    const fotosMap = new Map();
+    for (const f of fotos || []) {
+        if (!fotosMap.has(f.producto)) fotosMap.set(f.producto, []);
+        fotosMap.get(f.producto).push(f.foto_url);
+    }
+
+    const ganados = (pujos || []).map((p) => {
+        const item = itemsMap.get(p.item);
+        const producto = item ? productosMap.get(item.producto) : null;
+        return {
+            puja_id: String(p.identificador),
+            item_id: String(p.item),
+            titulo: producto?.descripcioncatalogo || `Ítem #${p.item}`,
+            imagen: (item ? fotosMap.get(item.producto)?.[0] : '') || '',
+            monto_ganador: Number(p.importe)
+        };
+    });
+
+    return { items: ganados };
+};
+
 module.exports = {
     obtenerEstadoPujasItem,
     realizarPuja,
     emitirNuevaPuja,
-    cerrarSubastaYLiquidar
+    cerrarSubastaYLiquidar,
+    obtenerPujasActuales,
+    obtenerPujasGanadas
 };

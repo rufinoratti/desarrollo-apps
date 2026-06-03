@@ -1,0 +1,1 @@
+export const PUJAS_POLLING_INTERVAL_MS = 1000;

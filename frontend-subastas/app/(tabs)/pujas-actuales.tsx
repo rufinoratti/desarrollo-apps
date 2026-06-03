@@ -5,6 +5,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState, useCallback } from 'react';
 import { API_URL } from '@/src/config/env';
+import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
 
 interface PujaActual {
   puja_id: string;
@@ -20,15 +21,24 @@ interface PujaActual {
   estado_subasta: string;
 }
 
+interface ItemGanado {
+  puja_id: string;
+  item_id: string;
+  titulo: string;
+  imagen: string;
+  monto_ganador: number;
+}
+
 export default function PujasActuales() {
   const { token, removeToken } = useAuth();
   const [pujas, setPujas] = useState<PujaActual[]>([]);
+  const [ganados, setGanados] = useState<ItemGanado[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchPujas = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/pujas/actuales`, {
+      const res = await fetch(`${API_URL}/api/pujas/actuales`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { removeToken(); return; }
@@ -43,13 +53,38 @@ export default function PujasActuales() {
     }
   }, [token, removeToken]);
 
+  const fetchGanados = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/pujas/ganadas`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { removeToken(); return; }
+      if (!res.ok) return;
+      const data = await res.json();
+      setGanados(data.items || []);
+    } catch {
+      // Silencioso
+    }
+  }, [token, removeToken]);
+
   useEffect(() => {
-    if (token) fetchPujas();
+    if (token) {
+      fetchPujas();
+      fetchGanados();
+    }
+  }, [token, fetchPujas, fetchGanados]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchPujas();
+    const interval = setInterval(fetchPujas, PUJAS_POLLING_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, [token, fetchPujas]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchPujas();
+    fetchGanados();
   };
 
   const formatearPrecio = (monto: number) => {
@@ -71,7 +106,13 @@ export default function PujasActuales() {
         });
       }}
     >
-      <Image source={{ uri: item.imagen }} style={styles.cardImagen} resizeMode="cover" />
+      {item.imagen ? (
+        <Image source={{ uri: item.imagen }} style={styles.cardImagen} resizeMode="cover" />
+      ) : (
+        <View style={[styles.cardImagen, styles.cardImagenPlaceholder]}>
+          <Ionicons name="image-outline" size={32} color="#CCC" />
+        </View>
+      )}
       <View style={styles.cardBody}>
         <View style={styles.cardHeader}>
           <Text style={styles.loteNumero}>{item.numero_lote}</Text>
@@ -100,6 +141,48 @@ export default function PujasActuales() {
     </TouchableOpacity>
   );
 
+  const renderGanado = ({ item }: { item: ItemGanado }) => (
+    <View style={styles.ganadoCard}>
+      <View style={styles.ganadoHeader}>
+        <Ionicons name="trophy" size={20} color="#DAA520" />
+        <Text style={styles.ganadoTitle}>¡GANASTE!</Text>
+      </View>
+      <View style={styles.ganadoBody}>
+        {item.imagen ? (
+          <Image source={{ uri: item.imagen }} style={styles.ganadoImagen} resizeMode="cover" />
+        ) : (
+          <View style={styles.ganadoImagenPlaceholder}>
+            <Ionicons name="image-outline" size={24} color="#CCC" />
+          </View>
+        )}
+        <View style={styles.ganadoInfo}>
+          <Text style={styles.ganadoProducto} numberOfLines={2}>{item.titulo}</Text>
+          <Text style={styles.ganadoPrecio}>{formatearPrecio(item.monto_ganador)}</Text>
+        </View>
+      </View>
+      <TouchableOpacity style={styles.contactarBtn} activeOpacity={0.7}>
+        <Text style={styles.contactarBtnTexto}>CONTACTARSE</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const ListHeader = () => {
+    if (!ganados.length) return null;
+    return (
+      <View style={styles.ganadosSection}>
+        <Text style={styles.ganadosSectionTitle}>TUS GANADOS</Text>
+        <FlatList
+          data={ganados}
+          keyExtractor={item => item.puja_id}
+          renderItem={renderGanado}
+          scrollEnabled={false}
+          contentContainerStyle={{ gap: 12 }}
+        />
+        <View style={styles.ganadosDivider} />
+      </View>
+    );
+  };
+
   if (cargando) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -121,6 +204,7 @@ export default function PujasActuales() {
         keyExtractor={item => item.puja_id}
         renderItem={renderPuja}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={ListHeader}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#000" />
         }
@@ -169,6 +253,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   cardImagen: { width: 120, height: '100%', backgroundColor: '#EAEAEA' },
+  cardImagenPlaceholder: { justifyContent: 'center', alignItems: 'center' },
   cardBody: { flex: 1, padding: 12, gap: 6 },
   cardHeader: {
     flexDirection: 'row',
@@ -194,6 +279,88 @@ const styles = StyleSheet.create({
   actualMonto: { fontSize: 14, fontWeight: '600', color: '#666' },
   tiempoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   tiempoTexto: { fontSize: 12, color: '#666' },
+  // Winners section
+  ganadosSection: {
+    marginBottom: 8,
+  },
+  ganadosSectionTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DAA520',
+    letterSpacing: 2,
+    marginBottom: 12,
+  },
+  ganadoCard: {
+    backgroundColor: '#FFFDE7',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F9E076',
+  },
+  ganadoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  ganadoTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#B8860B',
+    letterSpacing: 1,
+  },
+  ganadoBody: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  ganadoImagen: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#EAEAEA',
+  },
+  ganadoImagenPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#EAEAEA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ganadoInfo: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  ganadoProducto: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  ganadoPrecio: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+  contactarBtn: {
+    borderWidth: 1.5,
+    borderColor: '#B8860B',
+    borderRadius: 20,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  contactarBtnTexto: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B8860B',
+    letterSpacing: 1,
+  },
+  ganadosDivider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 16,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

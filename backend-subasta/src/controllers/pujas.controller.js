@@ -22,7 +22,27 @@ const realizarPuja = async (req, res, next) => {
     }
 };
 
+const obtenerPujasActuales = async (req, res, next) => {
+    try {
+        const result = await pujasService.obtenerPujasActuales({ authUser: req.user });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const obtenerPujasGanadas = async (req, res, next) => {
+    try {
+        const result = await pujasService.obtenerPujasGanadas({ authUser: req.user });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     obtenerEstadoPujasItem,
-    realizarPuja
+    realizarPuja,
+    obtenerPujasActuales,
+    obtenerPujasGanadas
 };

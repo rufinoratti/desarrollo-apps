@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -117,7 +118,7 @@ export default function ProductoScreen() {
   useEffect(() => {
     if (!token || !id) return;
     fetchPujas();
-    const interval = setInterval(fetchPujas, 3000);
+    const interval = setInterval(fetchPujas, PUJAS_POLLING_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [token, id, fetchPujas]);
 
