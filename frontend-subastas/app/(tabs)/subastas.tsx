@@ -71,7 +71,8 @@ interface SubastaItem {
 }
 
 function getDisplayStatus(item: SubastaItem): string {
-  if (String(item.estado).toLowerCase() === 'cerrada') return 'FINALIZADA';
+  const estadoLower = String(item.estado).toLowerCase();
+  if (estadoLower === 'cerrada' || estadoLower === 'finalizada') return 'FINALIZADA';
   const now = Date.now();
   const start = item.fecha_inicio ? new Date(item.fecha_inicio).getTime() : 0;
   const end = item.fecha_fin ? new Date(item.fecha_fin).getTime() : 0;

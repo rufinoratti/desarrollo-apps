@@ -42,7 +42,8 @@ const Skeleton = ({ width, height, borderRadius, style }: any) => {
 };
 
 function getDisplayStatus(item: Subasta): string {
-  if (String(item.estado).toLowerCase() === 'cerrada') return 'FINALIZADA';
+  const estadoLower = String(item.estado).toLowerCase();
+  if (estadoLower === 'cerrada' || estadoLower === 'finalizada') return 'FINALIZADA';
 
   const now = Date.now();
   const start = item.fecha_inicio ? new Date(item.fecha_inicio as string).getTime() : 0;
