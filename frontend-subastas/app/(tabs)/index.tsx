@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/src/config/env';
+import CountdownBadge from '@/src/components/CountdownBadge';
 
 type Categoria = {
   id?: number;
@@ -205,6 +206,12 @@ const fetchCategorias = async () => {
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{item.estado ?? ''}</Text>
             </View>
+          )}
+          {!bloqueada && (
+            <CountdownBadge
+              fechaInicio={(item as any).fecha_inicio}
+              fechaFin={(item as any).fecha_fin}
+            />
           )}
         </View>
 

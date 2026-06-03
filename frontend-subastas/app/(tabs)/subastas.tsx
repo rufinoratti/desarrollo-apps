@@ -5,6 +5,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import CountdownBadge from '@/src/components/CountdownBadge';
 
 interface Categoria {
   id: number;
@@ -196,6 +197,12 @@ export default function SubastasScreen() {
             <View style={styles.badgeProximamente}>
               <Text style={styles.badgeProximamenteTexto}>PRÓXIMAMENTE</Text>
             </View>
+          )}
+          {!bloqueada && (
+            <CountdownBadge
+              fechaInicio={(item as any).fecha_inicio}
+              fechaFin={(item as any).fecha_fin}
+            />
           )}
         </TouchableOpacity>
         <View style={styles.cardBody}>

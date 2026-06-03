@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import CountdownBadge from '@/src/components/CountdownBadge';
 
 interface ArticuloItem {
   id: string;
@@ -22,6 +23,8 @@ interface CatalogoSubastaInfo {
   id: string;
   titulo: string;
   estado: string;
+  fecha_inicio?: string | null;
+  fecha_fin?: string | null;
 }
 
 interface EstadoPujas {
@@ -259,16 +262,6 @@ export default function CatalogoScreen() {
   const formatearPrecio = (monto: number) =>
     `$ ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(monto)}`;
 
-  const calcularTiempoRestante = (_fechaFin: string | undefined) => {
-    const ahora = new Date().getTime();
-    const fin = new Date(ahora + 12 * 60 * 60 * 1000 + 15 * 60 * 1000).getTime();
-    const diferencia = fin - ahora;
-    if (diferencia <= 0) return '00h 00m';
-    const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-    return `${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
-  };
-
   const montoMinimo = estadoPujas
     ? estadoPujas.oferta_actual + (articuloSeleccionado ? articuloSeleccionado.precio_base * 0.01 : 0)
     : articuloSeleccionado?.precio_base ?? 0;
@@ -286,10 +279,10 @@ export default function CatalogoScreen() {
             <Text style={styles.badgeEnVivoTexto}>EN VIVO</Text>
           </View>
         )}
-        <View style={styles.badgeRestan}>
-          <Text style={styles.badgeRestanLabel}>RESTAN</Text>
-          <Text style={styles.badgeRestanTexto}>{calcularTiempoRestante(undefined)}</Text>
-        </View>
+        <CountdownBadge
+          fechaInicio={subastaInfo?.fecha_inicio}
+          fechaFin={subastaInfo?.fecha_fin}
+        />
       </TouchableOpacity>
 
       <View style={styles.cardBody}>
@@ -567,9 +560,6 @@ const styles = StyleSheet.create({
   cardImagen: { width: '100%', height: '100%' },
   badgeEnVivo: { position: 'absolute', top: 12, left: 12, backgroundColor: '#000', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2 },
   badgeEnVivoTexto: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  badgeRestan: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(230,230,230,0.85)', paddingHorizontal: 16, paddingVertical: 10, borderTopLeftRadius: 8, minWidth: 90 },
-  badgeRestanLabel: { fontSize: 9, color: '#666', textAlign: 'center', marginBottom: 2, letterSpacing: 1 },
-  badgeRestanTexto: { fontSize: 14, color: '#000', fontWeight: '500', textAlign: 'center' },
   cardBody: { paddingHorizontal: 4 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   cardTitleContainer: { flex: 1, paddingRight: 16 },
