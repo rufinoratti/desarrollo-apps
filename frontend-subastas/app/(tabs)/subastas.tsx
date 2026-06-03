@@ -80,6 +80,19 @@ function getDisplayStatus(item: SubastaItem): string {
   return 'EN VIVO';
 }
 
+const STATUS_ORDER: Record<string, number> = { 'EN VIVO': 0, 'PRÓXIMAMENTE': 1, 'FINALIZADA': 2 };
+
+function sortSubastas(list: SubastaItem[]): SubastaItem[] {
+  return [...list].sort((a, b) => {
+    const orderA = STATUS_ORDER[getDisplayStatus(a)] ?? 2;
+    const orderB = STATUS_ORDER[getDisplayStatus(b)] ?? 2;
+    if (orderA !== orderB) return orderA - orderB;
+    const startA = a.fecha_inicio ? new Date(a.fecha_inicio).getTime() : 0;
+    const startB = b.fecha_inicio ? new Date(b.fecha_inicio).getTime() : 0;
+    return startA - startB;
+  });
+}
+
 const BADGE_COLORS: Record<string, string> = {
   'EN VIVO': '#059669',
   'PRÓXIMAMENTE': '#2563EB',
@@ -156,7 +169,7 @@ export default function SubastasScreen() {
       if (!res.ok) return;
       const data = await res.json();
       setTotalPaginas(data.total_paginas);
-      setSubastas(prev => append ? [...prev, ...data.subastas] : data.subastas);
+      setSubastas(prev => append ? sortSubastas([...prev, ...data.subastas]) : sortSubastas(data.subastas));
     } catch {
       // Silencioso
     } finally {
