@@ -114,7 +114,9 @@ export default function ProductoScreen() {
   useEffect(() => {
     if (token) fetchDetalle();
   }, [token, fetchDetalle]);
+  
 
+  // Polling para actualizar las pujas en este caso 1000ms o 1seg
   useEffect(() => {
     if (!token || !id) return;
     fetchPujas();

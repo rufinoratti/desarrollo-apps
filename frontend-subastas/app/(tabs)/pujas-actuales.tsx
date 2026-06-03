@@ -74,6 +74,8 @@ export default function PujasActuales() {
     }
   }, [token, fetchPujas, fetchGanados]);
 
+
+  // Polling para actualizar las pujas cada cierto tiempo
   useEffect(() => {
     if (!token) return;
     fetchPujas();
