@@ -143,7 +143,6 @@ export default function AdminPanel() {
 
   const minFecha = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 11);
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
@@ -153,10 +152,6 @@ export default function AdminPanel() {
       if (event?.type === 'dismissed' || !selectedDate) return;
     }
     if (!selectedDate) return;
-    if (selectedDate < minFecha) {
-      Alert.alert('Fecha inválida', 'La fecha debe ser al menos 11 días a partir de hoy.');
-      return;
-    }
     setFechaPickerValue(selectedDate);
     setFormSubasta((prev) => ({ ...prev, fecha: formatFecha(selectedDate) }));
   };
@@ -474,7 +469,12 @@ export default function AdminPanel() {
         }),
       });
       if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) { Alert.alert('Error', 'No se pudo crear la subasta.'); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.log('[ERROR CREAR SUBASTA]', res.status, errData);
+        Alert.alert('Error', errData.error || 'No se pudo crear la subasta.');
+        return;
+      }
       Alert.alert('Listo', 'Subasta creada exitosamente.');
       setFormSubasta({ nombre: '', fecha: '', hora: '', ubicacion: '', capacidadasistentes: '', tienedeposito: '', seguridadpropia: '', categoria: '', tematica: 0 });
       setImagenUri(null); setImagenFile(null);
