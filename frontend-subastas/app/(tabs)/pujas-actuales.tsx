@@ -71,6 +71,7 @@ export default function PujasActuales() {
   const toastMostradoRef = useRef<Set<string>>(new Set());
   const cierresEmitidosRef = useRef<Set<string>>(new Set());
   const ultimaSuperadaRef = useRef<string | null>(null);
+  const timestampsCacheRef = useRef<Map<string, string>>(new Map());
   const { toast, mostrar, hide } = useToast();
 
   const armarNotificaciones = useCallback(
@@ -81,6 +82,12 @@ export default function PujasActuales() {
 
       const push = (n: Omit<Notificacion, '_seq'> & { _seq?: number }): void => {
         n._seq = seq++;
+        const cached = timestampsCacheRef.current.get(n.id);
+        if (cached) {
+          n.timestamp = cached;
+        } else {
+          timestampsCacheRef.current.set(n.id, n.timestamp);
+        }
         notifs.push(n as Notificacion);
       };
 
