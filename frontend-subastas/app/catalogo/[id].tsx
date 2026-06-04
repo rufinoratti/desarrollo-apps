@@ -151,6 +151,7 @@ export default function CatalogoScreen() {
   const [ordenSeleccionado, setOrdenSeleccionado] = useState('lote_numero');
   const [modalOrdenVisible, setModalOrdenVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const miUltimoMontoRef = useRef(0);
   // Mapa itemId → oferta actual para mostrar en las tarjetas
   const [ofertasActuales, setOfertasActuales] = useState<Record<string, number>>({});
 
@@ -163,6 +164,7 @@ export default function CatalogoScreen() {
   const [enviandoPuja, setEnviandoPuja] = useState(false);
   const [errorPuja, setErrorPuja] = useState<string | null>(null);
   const [pujaExitosa, setPujaExitosa] = useState(false);
+  const [soyGanador, setSoyGanador] = useState(false);
 
   const ordenes = [
     { key: 'lote_numero', label: 'N° Lote' },
@@ -272,6 +274,7 @@ export default function CatalogoScreen() {
       if (!res.ok) return;
       const data: EstadoPujas = await res.json();
       setEstadoPujas(data);
+      setSoyGanador(data.es_ganadora === true);
     } catch {
       // silencioso
     } finally {
@@ -298,6 +301,7 @@ export default function CatalogoScreen() {
     setMontoPuja('');
     setErrorPuja(null);
     setPujaExitosa(false);
+    setSoyGanador(false);
     setModalPujaVisible(true);
     fetchEstadoPujas(articulo.id, true);
   };
@@ -309,12 +313,17 @@ export default function CatalogoScreen() {
     setMontoPuja('');
     setErrorPuja(null);
     setPujaExitosa(false);
+    setSoyGanador(false);
     // Refresca el catálogo para actualizar precios
     fetchCatalogo();
   };
 
   const handleConfirmarPuja = async () => {
     if (!articuloSeleccionado) return;
+    if (esAutoPuja) {
+      setErrorPuja('Tu última puja es la ganadora. Esperá a que te superen.');
+      return;
+    }
     const monto = parseFloat(montoPuja.replace(/\./g, '').replace(',', '.'));
     if (isNaN(monto) || monto <= 0) {
       setErrorPuja('Ingresá un monto válido.');
@@ -338,11 +347,13 @@ export default function CatalogoScreen() {
           MONTO_INSUFICIENTE: `El monto mínimo es ${data.monto_minimo ? formatearPrecio(data.monto_minimo) : 'mayor a la oferta actual'}.`,
           MONTO_EXCEDE_LIMITE: 'El monto supera el límite máximo permitido para tu categoría.',
           USUARIO_EN_OTRA_SALA: 'Ya estás participando en otra subasta activa. Cerrá esa sesión primero.',
+          AUTO_PUJA: 'Tu última puja es la ganadora. Esperá a que te superen.',
         };
         setErrorPuja(mensajes[data.codigo] || data.error || 'No se pudo registrar la puja.');
         return;
       }
       // Puja exitosa
+      miUltimoMontoRef.current = monto;
       setPujaExitosa(true);
       setEstadoPujas(prev => prev ? { ...prev, oferta_actual: data.oferta_actual } : prev);
       // Actualiza la tarjeta del catálogo inmediatamente
@@ -376,6 +387,8 @@ export default function CatalogoScreen() {
 
   const formatearPrecio = (monto: number) =>
     `$ ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(monto)}`;
+
+  const esAutoPuja = soyGanador && miUltimoMontoRef.current > 0;
 
   const montoMinimo = estadoPujas
     ? estadoPujas.oferta_actual + (articuloSeleccionado ? articuloSeleccionado.precio_base * 0.01 : 0)
@@ -589,6 +602,22 @@ export default function CatalogoScreen() {
                   </View>
                 )}
 
+                {/* Advertencia auto-puja */}
+                {esAutoPuja && (
+                  <View style={styles.autoPujaWarning}>
+                    <Ionicons name="information-circle-outline" size={18} color="#D97706" />
+                    <Text style={styles.autoPujaWarningTexto}>Tu última puja es la ganadora. Esperá a que te superen para volver a pujar.</Text>
+                  </View>
+                )}
+
+                {/* Banner persistente: estás ganando */}
+                {soyGanador && !esAutoPuja && (
+                  <View style={styles.bannerGanadorPersistente}>
+                    <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                    <Text style={styles.bannerGanadorPersistenteTexto}>Tu puja es la más alta</Text>
+                  </View>
+                )}
+
                 {/* Campo de monto */}
                 {estadoPujas?.estado_subasta === 'ABIERTA' && (
                   <>
@@ -618,9 +647,9 @@ export default function CatalogoScreen() {
                     )}
 
                     <TouchableOpacity
-                      style={[styles.pujaConfirmarBtn, enviandoPuja && styles.pujaConfirmarBtnDisabled]}
+                      style={[styles.pujaConfirmarBtn, (enviandoPuja || esAutoPuja) && styles.pujaConfirmarBtnDisabled]}
                       onPress={handleConfirmarPuja}
-                      disabled={enviandoPuja}
+                      disabled={enviandoPuja || esAutoPuja}
                     >
                       {enviandoPuja ? (
                         <ActivityIndicator size="small" color="#fff" />
@@ -724,6 +753,10 @@ const styles = StyleSheet.create({
   historialMonto: { fontSize: 14, fontWeight: '600', color: '#000' },
   pujaSeparador: { height: 1, backgroundColor: '#EEEEEE', marginBottom: 20 },
   pujaExitosaContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 16 },
+  autoPujaWarning: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', padding: 12, borderRadius: 10, marginBottom: 16 },
+  autoPujaWarningTexto: { flex: 1, color: '#92400E', fontSize: 13, fontWeight: '600' },
+  bannerGanadorPersistente: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 16 },
+  bannerGanadorPersistenteTexto: { color: '#16A34A', fontSize: 14, fontWeight: '700' },
   pujaExitosaTexto: { color: '#16A34A', fontSize: 14, fontWeight: '600' },
   pujaInputLabel: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 8 },
   pujaInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#000', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12 },

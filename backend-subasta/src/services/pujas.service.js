@@ -83,11 +83,18 @@ const buildLocalHistorial = ({ itemId }) => {
     };
 };
 
-const obtenerEstadoPujasItemLocal = ({ itemId }) => {
+const obtenerEstadoPujasItemLocal = ({ itemId, authUser }) => {
     const { subasta, item } = getLocalItemContext(itemId);
     const bids = (store.bids || []).filter((b) => String(b.item_id) === String(itemId));
     const ofertaActual = getOfertaActualFromList(bids, item.precio_base);
     const { historial, totalParticipantes } = buildLocalHistorial({ itemId });
+
+    let es_ganadora = false;
+    if (authUser && bids.length > 0) {
+        const sortedBids = [...bids].sort((a, b) => Number(b.monto) - Number(a.monto));
+        const highestBid = sortedBids[0];
+        es_ganadora = String(highestBid.usuario_id) === String(authUser.id);
+    }
 
     return {
         item_id: String(item.id),
@@ -95,11 +102,12 @@ const obtenerEstadoPujasItemLocal = ({ itemId }) => {
         estado_subasta: mapEstadoSubastaApi(subasta.estado),
         tiempo_restante_segundos: null,
         total_participantes: totalParticipantes,
-        historial_pujas: historial
+        historial_pujas: historial,
+        es_ganadora
     };
 };
 
-const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
+const obtenerEstadoPujasItemSupabase = async ({ itemId, authUser }) => {
     const itemIdNum = Number(itemId);
     if (Number.isNaN(itemIdNum)) {
         throw new AppError('Artículo no encontrado', 404);
@@ -163,7 +171,7 @@ const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
     if (asistentesIds.length) {
       const { data: asistentesData, error: asistentesError } = await supabase
           .from('asistentes')
-          .select('identificador, numeropostor')
+          .select('identificador, numeropostor, cliente')
           .in('identificador', asistentesIds);
 
       if (asistentesError) {
@@ -171,6 +179,17 @@ const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
       }
 
       asistentesMap = new Map((asistentesData || []).map((a) => [a.identificador, a]));
+    }
+
+    let es_ganadora = false;
+    if (authUser && bids?.length > 0) {
+        const sortedByAmount = [...bids].sort((a, b) => Number(b.importe) - Number(a.importe));
+        const topBid = sortedByAmount[0];
+        if (topBid?.asistente) {
+            const clienteId = await resolveClienteIdSupabase(authUser);
+            const topAsistente = asistentesMap.get(topBid.asistente);
+            es_ganadora = topAsistente && Number(topAsistente.cliente) === Number(clienteId);
+        }
     }
 
     const historial = (bids || []).map((b) => ({
@@ -185,20 +204,21 @@ const obtenerEstadoPujasItemSupabase = async ({ itemId }) => {
         estado_subasta: mapEstadoSubastaApi(subasta?.estado),
         tiempo_restante_segundos: null,
         total_participantes: asistentesIds.length,
-        historial_pujas: historial
+        historial_pujas: historial,
+        es_ganadora
     };
 };
 
-const obtenerEstadoPujasItem = async ({ itemId }) => {
+const obtenerEstadoPujasItem = async ({ itemId, authUser }) => {
     if (!itemId) {
         throw new AppError('Artículo no encontrado', 404);
     }
 
     if (!isConfigured) {
-        return obtenerEstadoPujasItemLocal({ itemId });
+        return obtenerEstadoPujasItemLocal({ itemId, authUser });
     }
 
-    return obtenerEstadoPujasItemSupabase({ itemId });
+    return obtenerEstadoPujasItemSupabase({ itemId, authUser });
 };
 
 const validateMontoRules = ({ montoOfertado, ofertaActual, precioBase, categoriaSubasta }) => {
@@ -259,6 +279,16 @@ const realizarPujaLocal = async ({ authUser, payload }) => {
 
     const itemBids = (store.bids || []).filter((b) => String(b.item_id) === String(item.id));
     const ofertaActual = getOfertaActualFromList(itemBids, item.precio_base);
+
+    // Rechazar auto-puja: el usuario ya es el mejor postor
+    const highestBid = itemBids.length
+        ? itemBids.reduce((max, b) => (Number(b.monto) > Number(max.monto) ? b : max))
+        : null;
+    if (highestBid && String(highestBid.usuario_id) === String(user.id)) {
+        const err = new AppError('Ya eres el mejor postor. Esperá a que te superen.', 400);
+        err.codigo = 'AUTO_PUJA';
+        throw err;
+    }
 
     validateMontoRules({
         montoOfertado: monto_ofertado,
@@ -468,6 +498,29 @@ const realizarPujaSupabase = async ({ authUser, payload }) => {
     }
 
     const ofertaActual = await getOfertaActualSupabase(itemIdNum, item.preciobase);
+
+    // Rechazar auto-puja: verificar si el mejor postor actual es el mismo usuario
+    const { data: topBidder } = await supabase
+        .from('pujos')
+        .select('asistente')
+        .eq('item', itemIdNum)
+        .order('importe', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (topBidder?.asistente) {
+        const { data: topAsistente } = await supabase
+            .from('asistentes')
+            .select('cliente')
+            .eq('identificador', topBidder.asistente)
+            .maybeSingle();
+
+        if (topAsistente && Number(topAsistente.cliente) === Number(clienteId)) {
+            const err = new AppError('Ya eres el mejor postor. Esperá a que te superen.', 400);
+            err.codigo = 'AUTO_PUJA';
+            throw err;
+        }
+    }
 
     validateMontoRules({
         montoOfertado: monto_ofertado,
