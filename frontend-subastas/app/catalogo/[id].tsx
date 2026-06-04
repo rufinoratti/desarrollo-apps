@@ -166,6 +166,12 @@ export default function CatalogoScreen() {
   const [pujaExitosa, setPujaExitosa] = useState(false);
   const [soyGanador, setSoyGanador] = useState(false);
 
+  useEffect(() => {
+    if (!pujaExitosa) return;
+    const timer = setTimeout(() => setPujaExitosa(false), 2000);
+    return () => clearTimeout(timer);
+  }, [pujaExitosa]);
+
   const ordenes = [
     { key: 'lote_numero', label: 'N° Lote' },
     { key: 'precio_asc', label: 'Precio: menor a mayor' },

@@ -71,6 +71,7 @@ export default function PujasActuales() {
   const toastMostradoRef = useRef<Set<string>>(new Set());
   const cierresEmitidosRef = useRef<Set<string>>(new Set());
   const ultimaSuperadaRef = useRef<string | null>(null);
+  const ultimaSuperadaSubastaIdRef = useRef<string | null>(null);
   const timestampsCacheRef = useRef<Map<string, string>>(new Map());
   const { toast, mostrar, hide } = useToast();
 
@@ -111,6 +112,7 @@ export default function PujasActuales() {
 
         if (eraGanadora === true && esGanadoraAhora === false && !toastMostradoRef.current.has(p.puja_id)) {
           ultimaSuperadaRef.current = p.item_id;
+          ultimaSuperadaSubastaIdRef.current = p.subasta_id;
           mostrar(
             'OUTBID',
             '¡TE SUPERARON!',
@@ -283,16 +285,18 @@ export default function PujasActuales() {
   };
 
   const handleActionNotificacion = (n: Notificacion) => {
-    if ((n.tipo === 'SUPERADA' || n.tipo === 'GANADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
-      router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
+    if (n.tipo === 'SUPERADA' && n.subastaId) {
+      router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     } else if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
       router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     }
   };
 
   const handlePressNotificacion = (n: Notificacion) => {
-    if ((n.tipo === 'SUPERADA' || n.tipo === 'GANADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
+    if (n.tipo === 'GANADA' && n.itemId) {
       router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
+    } else if ((n.tipo === 'SUPERADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.subastaId) {
+      router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     } else if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
       router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     }
@@ -360,8 +364,8 @@ export default function PujasActuales() {
         toast={toast}
         onDismiss={hide}
         onActionPress={() => {
-          if (ultimaSuperadaRef.current) {
-            router.push({ pathname: '/producto/[id]', params: { id: ultimaSuperadaRef.current } });
+          if (ultimaSuperadaSubastaIdRef.current) {
+            router.push({ pathname: '/catalogo/[id]', params: { id: ultimaSuperadaSubastaIdRef.current } });
             hide();
           }
         }}
