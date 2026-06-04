@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
 import CountdownBadge from '@/src/components/CountdownBadge';
 
 interface ArticuloItem {
@@ -132,6 +133,7 @@ interface EstadoPujas {
   estado_subasta: string;
   total_participantes: number;
   historial_pujas: { monto: number; fecha_hora: string | null; postor: string }[];
+  es_ganadora?: boolean;
 }
 
 export default function CatalogoScreen() {
@@ -149,7 +151,6 @@ export default function CatalogoScreen() {
   const [ordenSeleccionado, setOrdenSeleccionado] = useState('lote_numero');
   const [modalOrdenVisible, setModalOrdenVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
-
   // Mapa itemId → oferta actual para mostrar en las tarjetas
   const [ofertasActuales, setOfertasActuales] = useState<Record<string, number>>({});
 
@@ -258,9 +259,11 @@ export default function CatalogoScreen() {
   }, [articulos, token]);
 
   // Trae el estado actual de pujas del ítem (oferta actual, historial)
-  const fetchEstadoPujas = async (itemId: string) => {
-    setCargandoPujas(true);
-    setEstadoPujas(null);
+  const fetchEstadoPujas = async (itemId: string, esInicial: boolean = false) => {
+    if (esInicial) {
+      setCargandoPujas(true);
+      setEstadoPujas(null);
+    }
     try {
       const res = await fetch(`${API_URL}/api/items/${itemId}/pujas`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -272,9 +275,22 @@ export default function CatalogoScreen() {
     } catch {
       // silencioso
     } finally {
-      setCargandoPujas(false);
+      if (esInicial) setCargandoPujas(false);
     }
   };
+
+  const fetchEstadoPujasRef = useRef(fetchEstadoPujas);
+  fetchEstadoPujasRef.current = fetchEstadoPujas;
+
+  useEffect(() => {
+    if (!modalPujaVisible || !articuloSeleccionado?.id || !token) return;
+    const idItem = articuloSeleccionado.id;
+    fetchEstadoPujasRef.current(idItem);
+    const interval = setInterval(() => {
+      fetchEstadoPujasRef.current(idItem);
+    }, PUJAS_POLLING_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [modalPujaVisible, articuloSeleccionado?.id, token]);
 
   const handleAbrirPuja = (articulo: ArticuloItem) => {
     if (subastaBloqueada) return; // prevenir apertura si nivel insuficiente
@@ -283,7 +299,7 @@ export default function CatalogoScreen() {
     setErrorPuja(null);
     setPujaExitosa(false);
     setModalPujaVisible(true);
-    fetchEstadoPujas(articulo.id);
+    fetchEstadoPujas(articulo.id, true);
   };
 
   const handleCerrarPuja = () => {
@@ -553,7 +569,7 @@ export default function CatalogoScreen() {
                 {/* Historial de pujas (últimas 3) */}
                 {estadoPujas && estadoPujas.historial_pujas.length > 0 && (
                   <View style={styles.historialContainer}>
-                    <Text style={styles.historialTitulo}>ÚLTIMAS PUJAS</Text>
+                    <Text style={[styles.historialTitulo, { marginBottom: 10 }]}>ÚLTIMAS PUJAS</Text>
                     {estadoPujas.historial_pujas.slice(0, 3).map((puja, idx) => (
                       <View key={idx} style={styles.historialFila}>
                         <Text style={styles.historialPostor}>{puja.postor}</Text>
@@ -702,7 +718,7 @@ const styles = StyleSheet.create({
   pujaEstadoDot: { width: 8, height: 8, borderRadius: 4 },
   pujaEstadoTexto: { fontSize: 13, fontWeight: '600', color: '#333' },
   historialContainer: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 14, marginBottom: 16 },
-  historialTitulo: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 10 },
+  historialTitulo: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1 },
   historialFila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
   historialPostor: { fontSize: 14, color: '#555' },
   historialMonto: { fontSize: 14, fontWeight: '600', color: '#000' },

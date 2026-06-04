@@ -585,6 +585,7 @@ const obtenerPujasActuales = async ({ authUser }) => {
     const itemsMap = new Map((items || []).map((i) => [i.identificador, i]));
     const catalogoIds = [...new Set((items || []).map((i) => i.catalogo).filter(Boolean))];
 
+    let subastasMap = new Map();
     let subastasActivas = new Set();
     if (catalogoIds.length) {
         const { data: catalogos } = await supabase
@@ -597,11 +598,23 @@ const obtenerPujasActuales = async ({ authUser }) => {
         if (subastaIds.length) {
             const { data: subastas } = await supabase
                 .from('subastas')
-                .select('identificador')
+                .select('identificador, nombre, fecha, hora')
                 .in('identificador', subastaIds)
                 .eq('estado', 'abierta');
+            subastasMap = new Map((subastas || []).map((s) => [s.identificador, s]));
             subastasActivas = new Set((subastas || []).map((s) => s.identificador));
         }
+    }
+
+    const { data: maxPujas } = await supabase
+        .from('pujos')
+        .select('item, importe')
+        .in('item', itemIds)
+        .order('importe', { ascending: false });
+
+    const maxPorItem = new Map();
+    for (const mp of maxPujas || []) {
+        if (!maxPorItem.has(mp.item)) maxPorItem.set(mp.item, Number(mp.importe));
     }
 
     const productIds = [...new Set((items || []).map((i) => i.producto).filter(Boolean))];
@@ -642,17 +655,31 @@ const obtenerPujasActuales = async ({ authUser }) => {
         if (!subastaId || !subastasActivas.has(subastaId)) continue;
 
         const producto = productosMap.get(item.producto);
+        const subasta = subastasMap.get(subastaId);
+        const miImporte = Number(p.importe);
+        const montoMaximo = maxPorItem.get(p.item) ?? miImporte;
+
+        let fechaFin = null;
+        if (subasta?.fecha && subasta?.hora) {
+            const inicio = new Date(`${subasta.fecha}T${subasta.hora}`);
+            if (!Number.isNaN(inicio.getTime())) {
+                fechaFin = new Date(inicio.getTime() + 3600 * 1000).toISOString();
+            }
+        }
 
         pujas.push({
             puja_id: String(p.identificador),
             item_id: String(p.item),
             subasta_id: String(subastaId),
+            subasta_titulo: subasta?.nombre || `Subasta #${subastaId}`,
             numero_lote: String(p.item).padStart(3, '0'),
             titulo: producto?.descripcioncatalogo || `Ítem #${p.item}`,
             imagen: fotosMap.get(item.producto)?.[0] || '',
-            monto_ofertado: Number(p.importe),
-            monto_actual: Number(p.importe),
-            es_ganadora: true,
+            monto_ofertado: miImporte,
+            monto_actual: montoMaximo,
+            monto_maximo_actual: montoMaximo,
+            es_ganadora: miImporte === montoMaximo,
+            fecha_fin: fechaFin,
             tiempo_restante: 'EN VIVO',
             estado_subasta: 'EN VIVO'
         });
