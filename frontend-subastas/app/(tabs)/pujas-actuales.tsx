@@ -1,233 +1,308 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  TouchableOpacity,
-  Image,
-  RefreshControl,
-  SectionList,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { API_URL } from '@/src/config/env';
+import { NOTIFICACIONES_POLLING_INTERVAL_MS } from '@/src/config/polling';
+import NotificacionCard, { Notificacion } from '@/src/components/NotificacionCard';
+import ToastOutbid from '@/src/components/ToastOutbid';
+import { useToast } from '@/src/hooks/useToast';
+
+const INTERVALOS_CIERRE = [45, 30, 15];
 
 interface PujaActual {
   puja_id: string;
   item_id: string;
   subasta_id: string;
+  subasta_titulo?: string;
   numero_lote: string;
   titulo: string;
   imagen: string;
   monto_ofertado: number;
   monto_actual: number;
+  monto_maximo_actual: number;
   es_ganadora: boolean;
+  fecha_fin?: string | null;
   tiempo_restante: string;
   estado_subasta: string;
 }
 
-interface Notificacion {
-  id_evento: string;
-  tipo_evento: 'ADJUDICADO' | 'PUJA_ACTIVA' | 'PUJA_SUPERADA' | 'PAGO_PENDIENTE' | 'ENTREGA_COORDINADA';
-  item_id: string | null;
-  titulo_lote: string;
-  fecha_texto: string;
-  monto: number | null;
-  etiqueta_monto: string | null;
-  leida: boolean;
+interface ItemGanado {
+  puja_id: string;
+  item_id: string;
+  titulo: string;
+  imagen: string;
+  monto_ganador: number;
 }
 
-const TIPO_CONFIG: Record<
-  string,
-  { label: string; color: string; bg: string; icon: keyof typeof Ionicons.glyphMap }
-> = {
-  ADJUDICADO: { label: 'GANASTE', color: '#1B5E20', bg: '#E8F5E9', icon: 'trophy-outline' },
-  PUJA_ACTIVA: { label: 'GANANDO', color: '#2E7D32', bg: '#E8F5E9', icon: 'trending-up-outline' },
-  PUJA_SUPERADA: { label: 'SUPERADA', color: '#C62828', bg: '#FFEBEE', icon: 'arrow-down-outline' },
-  PAGO_PENDIENTE: { label: 'PAGO', color: '#E65100', bg: '#FFF3E0', icon: 'card-outline' },
-  ENTREGA_COORDINADA: { label: 'ENTREGA', color: '#1565C0', bg: '#E3F2FD', icon: 'cube-outline' },
+interface SubastaResumen {
+  id: string | number;
+  identificador?: string | number;
+  titulo?: string;
+  nombre?: string;
+  estado?: string;
+  fecha_inicio?: string;
+  imagen_portada?: string;
+  imagen?: string;
+}
+
+const formatearPrecio = (monto: number) => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(monto);
+};
+
+type Seccion = {
+  titulo: 'HOY' | 'AYER' | 'ANTERIORMENTE';
+  data: Notificacion[];
 };
 
 export default function PujasActuales() {
   const { token, removeToken } = useAuth();
-  const [pujas, setPujas] = useState<PujaActual[]>([]);
-  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
-  const [totalNoLeidas, setTotalNoLeidas] = useState(0);
+  const [secciones, setSecciones] = useState<Seccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDatos = useCallback(async () => {
-    try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [resPujas, resNotif] = await Promise.all([
-        fetch(`${API_URL}/api/pujas/actuales`, { headers }),
-        fetch(`${API_URL}/api/notificaciones`, { headers }),
-      ]);
+  const pujasSnapshotRef = useRef<Map<string, boolean>>(new Map());
+  const toastMostradoRef = useRef<Set<string>>(new Set());
+  const cierresEmitidosRef = useRef<Set<string>>(new Set());
+  const ultimaSuperadaRef = useRef<string | null>(null);
+  const timestampsCacheRef = useRef<Map<string, string>>(new Map());
+  const { toast, mostrar, hide } = useToast();
 
-      if (resPujas.status === 401 || resNotif.status === 401) {
-        removeToken();
-        return;
+  const armarNotificaciones = useCallback(
+    (pujas: PujaActual[], ganados: ItemGanado[], subastas: SubastaResumen[]): Notificacion[] => {
+      const ahora = Date.now();
+      const notifs: Notificacion[] = [];
+      let seq = 0;
+
+      const push = (n: Omit<Notificacion, '_seq'> & { _seq?: number }): void => {
+        n._seq = seq++;
+        const cached = timestampsCacheRef.current.get(n.id);
+        if (cached) {
+          n.timestamp = cached;
+        } else {
+          timestampsCacheRef.current.set(n.id, n.timestamp);
+        }
+        notifs.push(n as Notificacion);
+      };
+
+      for (const g of ganados) {
+        push({
+          id: `ganada-${g.puja_id}`,
+          tipo: 'GANADA',
+          titulo: '¡FELICIDADES! GANASTE EL LOTE',
+          lote: `LOTE #${String(g.item_id).padStart(3, '0')}`,
+          descripcion: `Tu puja final de ${formatearPrecio(g.monto_ganador)} resultó ganadora.`,
+          timestamp: new Date().toISOString(),
+          itemId: g.item_id,
+          imagen: g.imagen,
+          monto: g.monto_ganador,
+        });
       }
 
-      if (resPujas.ok) {
-        const dataPujas = await resPujas.json();
-        setPujas(dataPujas.pujas || []);
+      for (const p of pujas) {
+        const eraGanadora = pujasSnapshotRef.current.get(p.puja_id);
+        const esGanadoraAhora = p.es_ganadora;
+
+        if (eraGanadora === true && esGanadoraAhora === false && !toastMostradoRef.current.has(p.puja_id)) {
+          ultimaSuperadaRef.current = p.item_id;
+          mostrar(
+            'OUTBID',
+            '¡TE SUPERARON!',
+            `LOTE #${p.numero_lote} - Tu oferta fue superada.`
+          );
+          toastMostradoRef.current.add(p.puja_id);
+          setTimeout(() => toastMostradoRef.current.delete(p.puja_id), 60000);
+        }
+
+        pujasSnapshotRef.current.set(p.puja_id, esGanadoraAhora);
+
+        if (!esGanadoraAhora) {
+          push({
+            id: `superada-${p.puja_id}`,
+            tipo: 'SUPERADA',
+            titulo: 'PUJA SUPERADA',
+            lote: `LOTE #${p.numero_lote}`,
+            descripcion: `Alguien superó tu oferta por el "${p.titulo}". Puja ahora para recuperar la posición.`,
+            timestamp: new Date().toISOString(),
+            itemId: p.item_id,
+            subastaId: p.subasta_id,
+            imagen: p.imagen,
+            monto: p.monto_ofertado,
+          });
+        }
       }
 
-      if (resNotif.ok) {
-        const dataNotif = await resNotif.json();
-        setNotificaciones(dataNotif.notificaciones || []);
-        setTotalNoLeidas(dataNotif.total_no_leidas ?? 0);
+      for (const p of pujas) {
+        if (!p.fecha_fin || !p.es_ganadora) continue;
+        const finMs = new Date(p.fecha_fin).getTime();
+        if (Number.isNaN(finMs)) continue;
+        const minutosRestantes = (finMs - ahora) / 60000;
+        for (const intervalo of INTERVALOS_CIERRE) {
+          const key = `${intervalo}-${p.puja_id}`;
+          if (cierresEmitidosRef.current.has(key)) continue;
+          if (Math.abs(minutosRestantes - intervalo) <= 0.5) {
+            cierresEmitidosRef.current.add(key);
+            push({
+              id: `cierre-${key}`,
+              tipo: 'CIERRE_INMINENTE',
+              titulo: 'CIERRE INMINENTE',
+              lote: `LOTE #${p.numero_lote}`,
+              descripcion: `Faltan ${intervalo} minutos para el cierre. ${intervalo === 15 ? 'Última oportunidad para ajustar tu oferta.' : 'Asegurate de tener configurada tu puja máxima.'}`,
+              timestamp: new Date().toISOString(),
+              itemId: p.item_id,
+              subastaId: p.subasta_id,
+              imagen: p.imagen,
+            });
+          }
+        }
       }
-    } catch {
-      // Silencioso
-    } finally {
-      setCargando(false);
-      setRefreshing(false);
+
+      for (const s of subastas) {
+        if (s.estado !== 'EN_VIVO') continue;
+        if (!s.fecha_inicio) continue;
+        const inicioMs = new Date(s.fecha_inicio).getTime();
+        if (Number.isNaN(inicioMs)) continue;
+        const diffMin = (ahora - inicioMs) / 60000;
+        if (diffMin >= 0 && diffMin <= 60 * 24) {
+          const idSub = s.identificador ?? s.id;
+          push({
+            id: `iniciada-${idSub}`,
+            tipo: 'SUBASTA_INICIADA',
+            titulo: 'SUBASTA INICIADA',
+            lote: String(s.nombre || s.titulo || '').toUpperCase(),
+            descripcion: `El catálogo "${s.nombre || s.titulo || ''}" ya está recibiendo ofertas. Explora los lotes exclusivos disponibles hoy.`,
+            timestamp: s.fecha_inicio,
+            subastaId: String(idSub),
+            imagen: s.imagen_portada || s.imagen,
+          });
+        }
+      }
+
+      return notifs;
+    },
+    [mostrar]
+  );
+
+  const agruparPorFecha = useCallback((notifs: Notificacion[]): Seccion[] => {
+    const ahora = new Date();
+    const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).getTime();
+    const inicioAyer = inicioHoy - 24 * 60 * 60 * 1000;
+
+    const hoy: Notificacion[] = [];
+    const ayer: Notificacion[] = [];
+    const anteriores: Notificacion[] = [];
+
+    for (const n of notifs) {
+      const t = new Date(n.timestamp).getTime();
+      if (Number.isNaN(t)) {
+        hoy.push(n);
+        continue;
+      }
+      if (t >= inicioHoy) hoy.push(n);
+      else if (t >= inicioAyer) ayer.push(n);
+      else anteriores.push(n);
     }
-  }, [token, removeToken]);
+
+    const sortByTime = (a: Notificacion, b: Notificacion) => {
+      const ta = new Date(a.timestamp).getTime();
+      const tb = new Date(b.timestamp).getTime();
+      const va = Number.isNaN(ta) ? 0 : ta;
+      const vb = Number.isNaN(tb) ? 0 : tb;
+      if (vb !== va) return vb - va;
+      return (b._seq ?? 0) - (a._seq ?? 0);
+    };
+    hoy.sort(sortByTime);
+    ayer.sort(sortByTime);
+    anteriores.sort(sortByTime);
+
+    const secciones: Seccion[] = [];
+    if (hoy.length) secciones.push({ titulo: 'HOY', data: hoy });
+    if (ayer.length) secciones.push({ titulo: 'AYER', data: ayer });
+    if (anteriores.length) secciones.push({ titulo: 'ANTERIORMENTE', data: anteriores });
+    return secciones;
+  }, []);
+
+  const fetchTodo = useCallback(
+    async (mostrarCargando: boolean = true) => {
+      if (!token) return;
+      if (mostrarCargando) setCargando(true);
+      try {
+        const [pujasRes, ganadosRes, subastasRes] = await Promise.all([
+          fetch(`${API_URL}/api/pujas/actuales`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/pujas/ganadas`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/subastas?pagina=1&limite=20`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (pujasRes.status === 401 || ganadosRes.status === 401) {
+          removeToken();
+          return;
+        }
+
+        const pujasData = pujasRes.ok ? await pujasRes.json() : { pujas: [] };
+        const ganadosData = ganadosRes.ok ? await ganadosRes.json() : { items: [] };
+        const subastasData = subastasRes.ok ? await subastasRes.json() : { subastas: [] };
+
+        const notifs = armarNotificaciones(
+          pujasData.pujas || [],
+          ganadosData.items || [],
+          subastasData.subastas || []
+        );
+        setSecciones(agruparPorFecha(notifs));
+      } catch (e) {
+        console.error('Error cargando notificaciones', e);
+      } finally {
+        setCargando(false);
+        setRefreshing(false);
+      }
+    },
+    [token, removeToken, armarNotificaciones, agruparPorFecha]
+  );
 
   useEffect(() => {
-    if (token) fetchDatos();
-  }, [token, fetchDatos]);
+    if (!token) return;
+    fetchTodo(true);
+    const interval = setInterval(() => fetchTodo(false), NOTIFICACIONES_POLLING_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [token, fetchTodo]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchDatos();
+    fetchTodo(false);
   };
 
-  const marcarLeida = async (notif: Notificacion) => {
-    if (notif.leida) return;
-    try {
-      await fetch(`${API_URL}/api/notificaciones/${notif.id_evento}/leer`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setNotificaciones((prev) =>
-        prev.map((n) =>
-          n.id_evento === notif.id_evento ? { ...n, leida: true } : n
-        )
-      );
-      setTotalNoLeidas((c) => Math.max(0, c - 1));
-    } catch {
-      // Silencioso
-    }
-  };
-
-  const handleNotificacionPress = async (notif: Notificacion) => {
-    await marcarLeida(notif);
-
-    if (notif.tipo_evento === 'ADJUDICADO' && notif.item_id) {
-      router.push({
-        pathname: '/adjudicacion/[id]',
-        params: { id: notif.item_id },
-      });
+  const navegarNotificacion = (n: Notificacion) => {
+    if (n.tipo === 'GANADA' && n.itemId) {
+      router.push({ pathname: '/adjudicacion/[id]', params: { id: n.itemId } });
       return;
     }
-
-    if (notif.item_id) {
-      router.push({
-        pathname: '/producto/[id]',
-        params: { id: notif.item_id },
-      });
+    if ((n.tipo === 'SUPERADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
+      router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
+      return;
+    }
+    if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
+      router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     }
   };
 
-  const formatearPrecio = (monto: number) =>
-    new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
-    }).format(monto);
-
-  const renderNotificacion = ({ item }: { item: Notificacion }) => {
-    const config = TIPO_CONFIG[item.tipo_evento] || TIPO_CONFIG.PUJA_ACTIVA;
-
-    return (
-      <TouchableOpacity
-        style={[styles.notifCard, !item.leida && styles.notifCardUnread]}
-        activeOpacity={0.9}
-        onPress={() => handleNotificacionPress(item)}
-      >
-        <View style={[styles.notifIconBox, { backgroundColor: config.bg }]}>
-          <Ionicons name={config.icon} size={22} color={config.color} />
-        </View>
-        <View style={styles.notifBody}>
-          <View style={styles.notifHeader}>
-            <View style={[styles.estadoBadge, { backgroundColor: config.bg }]}>
-              <Text style={[styles.estadoBadgeText, { color: config.color }]}>
-                {config.label}
-              </Text>
-            </View>
-            <Text style={styles.notifFecha}>{item.fecha_texto}</Text>
-          </View>
-          <Text style={styles.notifTitulo} numberOfLines={2}>
-            {item.titulo_lote}
-          </Text>
-          {item.monto != null && item.etiqueta_monto && (
-            <Text style={styles.notifMonto}>
-              {item.etiqueta_monto}: {formatearPrecio(item.monto)}
-            </Text>
-          )}
-          {item.tipo_evento === 'ADJUDICADO' && (
-            <Text style={styles.notifCta}>Tocá para ver liquidación y pagar →</Text>
-          )}
-        </View>
-        {!item.leida && <View style={styles.unreadDot} />}
-      </TouchableOpacity>
-    );
+  const handleActionNotificacion = (n: Notificacion) => {
+    navegarNotificacion(n);
   };
 
-  const renderPuja = ({ item }: { item: PujaActual }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.9}
-      onPress={() => {
-        router.push({
-          pathname: '/catalogo/[id]',
-          params: { id: item.subasta_id, titulo: item.titulo },
-        });
-      }}
-    >
-      <Image source={{ uri: item.imagen }} style={styles.cardImagen} resizeMode="cover" />
-      <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.loteNumero}>{item.numero_lote}</Text>
-          <View style={[styles.estadoBadge, item.es_ganadora ? styles.ganadoraBadge : styles.perdiendoBadge]}>
-            <Text style={[styles.estadoBadgeText, item.es_ganadora ? styles.ganadoraText : styles.perdiendoText]}>
-              {item.es_ganadora ? 'GANANDO' : 'SUPERADA'}
-            </Text>
-          </View>
-        </View>
-        <Text style={styles.cardTitulo} numberOfLines={2}>{item.titulo}</Text>
-        <View style={styles.cardFooter}>
-          <View>
-            <Text style={styles.ofertaLabel}>MI OFERTA</Text>
-            <Text style={styles.ofertaMonto}>{formatearPrecio(item.monto_ofertado)}</Text>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.actualLabel}>OFERTA ACTUAL</Text>
-            <Text style={styles.actualMonto}>{formatearPrecio(item.monto_actual)}</Text>
-          </View>
-        </View>
-        <View style={styles.tiempoRow}>
-          <Ionicons name="time-outline" size={14} color="#666" />
-          <Text style={styles.tiempoTexto}>{item.tiempo_restante}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const sections = [
-    ...(notificaciones.length
-      ? [{ title: 'NOTIFICACIONES', data: notificaciones as (Notificacion | PujaActual)[] }]
-      : []),
-    { title: 'PUJAS ACTIVAS', data: pujas as (Notificacion | PujaActual)[] },
-  ];
+  const handlePressNotificacion = (n: Notificacion) => {
+    navegarNotificacion(n);
+  };
 
   if (cargando) {
     return (
@@ -237,59 +312,66 @@ export default function PujasActuales() {
     );
   }
 
-  const hayContenido = notificaciones.length > 0 || pujas.length > 0;
+  const empty = secciones.length === 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerSpacer} />
-        <Text style={styles.headerTitle}>REMATIX</Text>
-        <View style={styles.headerSpacer}>
-          {totalNoLeidas > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{totalNoLeidas > 9 ? '9+' : totalNoLeidas}</Text>
-            </View>
-          )}
-          <Ionicons name="notifications-outline" size={22} color="#000" />
-        </View>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
+          <Ionicons name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>NOTIFICACIONES</Text>
+        <View style={styles.backButton} />
       </View>
 
-      {!hayContenido ? (
+      {empty ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="hammer-outline" size={48} color="#CCC" />
-          <Text style={styles.emptyTitle}>Sin pujas activas</Text>
-          <Text style={styles.emptySubtitle}>Explorá las subastas y hacé tu primera oferta</Text>
+          <Ionicons name="notifications-off-outline" size={56} color="#CCC" />
+          <Text style={styles.emptyTitle}>Sin notificaciones</Text>
+          <Text style={styles.emptySubtitle}>
+            Cuando ganes una subasta, te superen una puja o haya cierres inminentes, vas a verlos acá.
+          </Text>
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => router.push('/(tabs)/subastas')}
           >
-            <Text style={styles.emptyButtonText}>VER SUBASTAS</Text>
+            <Text style={styles.emptyButtonText}>EXPLORAR SUBASTAS</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item, index) => {
-            if ('id_evento' in item) return item.id_evento;
-            return (item as PujaActual).puja_id || String(index);
-          }}
-          renderSectionHeader={({ section: { title } }) => (
-            <Text style={styles.sectionTitle}>{title}</Text>
-          )}
-          renderItem={({ item, section }) => {
-            if (section.title === 'NOTIFICACIONES') {
-              return renderNotificacion({ item: item as Notificacion });
-            }
-            return renderPuja({ item: item as PujaActual });
-          }}
+        <FlatList
+          data={secciones}
+          keyExtractor={(s) => s.titulo}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#000" />
           }
-          stickySectionHeadersEnabled={false}
-          ListEmptyComponent={null}
+          renderItem={({ item: seccion }) => (
+            <View>
+              <Text style={styles.sectionTitle}>{seccion.titulo}</Text>
+              {seccion.data.map((n) => (
+                <NotificacionCard
+                  key={n.id}
+                  notificacion={n}
+                  onPress={() => handlePressNotificacion(n)}
+                  onActionPress={() => handleActionNotificacion(n)}
+                />
+              ))}
+            </View>
+          )}
         />
       )}
+
+      <ToastOutbid
+        toast={toast}
+        onDismiss={hide}
+        onActionPress={() => {
+          if (ultimaSuperadaRef.current) {
+            router.push({ pathname: '/producto/[id]', params: { id: ultimaSuperadaRef.current } });
+            hide();
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -300,113 +382,27 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#F8F9FA',
   },
-  headerSpacer: { width: 40, alignItems: 'center', justifyContent: 'center' },
+  backButton: { width: 32, alignItems: 'center', justifyContent: 'center' },
   headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 4,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 3,
     color: '#000',
   },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -2,
-    backgroundColor: '#000',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    zIndex: 1,
-  },
-  badgeText: { color: '#FFF', fontSize: 9, fontWeight: '700' },
+  listContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
   sectionTitle: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#888',
-    letterSpacing: 1.5,
+    fontWeight: '800',
+    color: '#999',
+    letterSpacing: 2,
+    marginTop: 12,
     marginBottom: 10,
-    marginTop: 4,
   },
-  listContent: { padding: 16, paddingBottom: 32 },
-  notifCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 12,
-  },
-  notifCardUnread: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#000',
-  },
-  notifIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifBody: { flex: 1 },
-  notifHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  notifFecha: { fontSize: 11, color: '#999' },
-  notifTitulo: { fontSize: 14, fontWeight: '700', color: '#000', marginBottom: 4 },
-  notifMonto: { fontSize: 13, fontWeight: '600', color: '#333' },
-  notifCta: { fontSize: 11, color: '#666', marginTop: 6, fontStyle: 'italic' },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#000',
-    marginTop: 4,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  cardImagen: { width: 120, height: '100%', backgroundColor: '#EAEAEA', minHeight: 120 },
-  cardBody: { flex: 1, padding: 12, gap: 6 },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  loteNumero: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1 },
-  estadoBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  ganadoraBadge: { backgroundColor: '#E8F5E9' },
-  perdiendoBadge: { backgroundColor: '#FFEBEE' },
-  estadoBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  ganadoraText: { color: '#2E7D32' },
-  perdiendoText: { color: '#C62828' },
-  cardTitulo: { fontSize: 14, fontWeight: '700', color: '#000' },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  ofertaLabel: { fontSize: 9, color: '#999', letterSpacing: 1 },
-  ofertaMonto: { fontSize: 16, fontWeight: '700', color: '#000' },
-  actualLabel: { fontSize: 9, color: '#999', letterSpacing: 1 },
-  actualMonto: { fontSize: 14, fontWeight: '600', color: '#666' },
-  tiempoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  tiempoTexto: { fontSize: 12, color: '#666' },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -421,10 +417,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#888',
     textAlign: 'center',
     marginBottom: 24,
+    lineHeight: 18,
   },
   emptyButton: {
     borderWidth: 1.5,
@@ -434,9 +431,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#000',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
 });

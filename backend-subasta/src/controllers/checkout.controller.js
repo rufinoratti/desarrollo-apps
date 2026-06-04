@@ -5,7 +5,7 @@ const obtenerLiquidacionAdjudicacion = async (req, res, next) => {
         const { itemId } = req.params;
         const result = await checkoutService.obtenerLiquidacionAdjudicacion({
             itemId,
-            userId: req.user.id
+            authUser: req.user
         });
         return res.status(200).json(result);
     } catch (error) {

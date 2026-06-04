@@ -79,9 +79,6 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
 
         if (estadoDB) {
             query = query.eq('estado', estadoDB);
-        } else if (!estado) {
-            // Por defecto traemos las abiertas
-            query = query.eq('estado', 'abierta');
         }
 
         // Ordenamos por la fecha de la base de datos
@@ -154,10 +151,17 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
         }
 
         const ordenadas = ordenarSubastasLocales(resultado);
-        const subastas = ordenadas.slice(desde, hasta + 1).map((s) => ({
-            ...s,
-            cantidad_articulos: s.cantidad_articulos ?? (Array.isArray(s.items) ? s.items.length : s.total_items ?? 0)
-        }));
+        const subastas = ordenadas.slice(desde, hasta + 1).map((s) => {
+            let fechaFin = s.fecha_fin || null;
+            if (!fechaFin && s.fecha_inicio) {
+                fechaFin = new Date(new Date(s.fecha_inicio).getTime() + 3600 * 1000).toISOString();
+            }
+            return {
+                ...s,
+                fecha_fin: fechaFin,
+                cantidad_articulos: s.cantidad_articulos ?? (Array.isArray(s.items) ? s.items.length : s.total_items ?? 0)
+            };
+        });
         const total = ordenadas.length;
 
         return {
@@ -176,23 +180,28 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
 /**
  * Mapea una fila de Supabase (esquema del profe) al formato SubastaResumen del Swagger.
  */
-const formatearSubastaResumen = (row, totalItems = 0) => ({
-    id: row.identificador,
-    titulo: row.nombre || `Subasta #${row.identificador}`,
-    categoria_id: row.tematica,
-    categoria_nombre: row.categorias_tematicas?.nombre || null,
-    icono_url: null,
-    estado: row.estado === 'abierta' ? 'EN_VIVO' : 'FINALIZADA',
-    imagen_portada: row.imagen || null,
-    moneda: 'ARS',
-    ubicacion: row.ubicacion || 'Ubicación no definida',
-    rematador: row.subastador,
-    fecha_inicio: `${row.fecha}T${row.hora}`,
-    fecha_fin: null,
-    nivel_acceso: row.categoria,
-    precio_base_minimo: null,
-    cantidad_articulos: totalItems
-});
+const formatearSubastaResumen = (row, totalItems = 0) => {
+    const fechaInicio = `${row.fecha}T${row.hora}`;
+    const inicio = new Date(fechaInicio);
+    const fechaFin = new Date(inicio.getTime() + 3600 * 1000).toISOString();
+    return {
+        id: row.identificador,
+        titulo: row.nombre || `Subasta #${row.identificador}`,
+        categoria_id: row.tematica,
+        categoria_nombre: row.categorias_tematicas?.nombre || null,
+        icono_url: null,
+        estado: row.estado === 'abierta' ? 'EN_VIVO' : 'FINALIZADA',
+        imagen_portada: row.imagen || null,
+        moneda: 'ARS',
+        ubicacion: row.ubicacion || 'Ubicación no definida',
+        rematador: row.subastador,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin,
+        nivel_acceso: row.categoria,
+        precio_base_minimo: null,
+        cantidad_articulos: totalItems
+    };
+};
 
 module.exports = {
     obtenerCategorias,

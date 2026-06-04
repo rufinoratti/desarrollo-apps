@@ -1,6 +1,6 @@
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert
+  Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert, Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -8,6 +8,8 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
+import CountdownBadge from '@/src/components/CountdownBadge';
 
 interface ArticuloItem {
   id: string;
@@ -22,6 +24,107 @@ interface CatalogoSubastaInfo {
   id: string;
   titulo: string;
   estado: string;
+  fecha_inicio?: string | null;
+  fecha_fin?: string | null;
+  ubicacion?: string | null;
+  cantidad_articulos?: number | null;
+}
+
+function getDisplayStatus(item: CatalogoSubastaInfo): string {
+  const estadoLower = String(item.estado).toLowerCase();
+  if (estadoLower === 'cerrada' || estadoLower === 'finalizada') return 'FINALIZADA';
+  const now = Date.now();
+  const start = item.fecha_inicio ? new Date(item.fecha_inicio).getTime() : 0;
+  const end = item.fecha_fin ? new Date(item.fecha_fin).getTime() : 0;
+  if (start && now < start) return 'PRÓXIMAMENTE';
+  if (end && now >= end) return 'FINALIZADA';
+  return 'EN VIVO';
+}
+
+const BADGE_COLORS: Record<string, string> = {
+  'EN VIVO': '#059669',
+  'PRÓXIMAMENTE': '#2563EB',
+  'FINALIZADA': '#6B7280',
+};
+
+function StatusBadge({ estado }: { estado: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (estado !== 'EN VIVO') return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [estado, pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.estadoBadge,
+        {
+          backgroundColor: BADGE_COLORS[estado] || '#000',
+          opacity: estado === 'EN VIVO' ? pulseAnim : 1,
+        },
+      ]}
+    >
+      <Text style={styles.estadoBadgeTexto}>{estado}</Text>
+    </Animated.View>
+  );
+}
+
+function CatalogoHeader({ subastaInfo, articulosCount }: { subastaInfo: CatalogoSubastaInfo; articulosCount: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const estado = getDisplayStatus(subastaInfo);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const fecha = subastaInfo.fecha_inicio
+    ? new Date(subastaInfo.fecha_inicio).toLocaleDateString('es-AR', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : null;
+
+  return (
+    <Animated.View style={[styles.headerSection, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <StatusBadge estado={estado} />
+      <Text style={styles.headerTitulo} numberOfLines={2}>{subastaInfo.titulo}</Text>
+      <View style={styles.headerMeta}>
+        {articulosCount > 0 && (
+          <View style={styles.headerMetaItem}>
+            <Text style={styles.headerMetaNum}>{articulosCount}</Text>
+            <Text style={styles.headerMetaLabel}>artículos</Text>
+          </View>
+        )}
+        {subastaInfo.ubicacion && (
+          <>
+            <View style={styles.headerMetaDot} />
+            <View style={styles.headerMetaItem}>
+              <Text style={styles.headerMetaLabel}>{subastaInfo.ubicacion}</Text>
+            </View>
+          </>
+        )}
+        {fecha && (
+          <>
+            <View style={styles.headerMetaDot} />
+            <View style={styles.headerMetaItem}>
+              <Text style={styles.headerMetaLabel}>{fecha}</Text>
+            </View>
+          </>
+        )}
+      </View>
+    </Animated.View>
+  );
 }
 
 interface EstadoPujas {
@@ -30,11 +133,12 @@ interface EstadoPujas {
   estado_subasta: string;
   total_participantes: number;
   historial_pujas: { monto: number; fecha_hora: string | null; postor: string }[];
+  es_ganadora?: boolean;
 }
 
 export default function CatalogoScreen() {
   const { id, titulo } = useLocalSearchParams<{ id: string; titulo: string }>();
-  const { token, removeToken } = useAuth();
+  const { token, removeToken, nivel } = useAuth();
 
   const removeTokenRef = useRef(removeToken);
   useEffect(() => { removeTokenRef.current = removeToken; }, [removeToken]);
@@ -47,7 +151,7 @@ export default function CatalogoScreen() {
   const [ordenSeleccionado, setOrdenSeleccionado] = useState('lote_numero');
   const [modalOrdenVisible, setModalOrdenVisible] = useState(false);
   const inputRef = useRef<TextInput>(null);
-
+  const miUltimoMontoRef = useRef(0);
   // Mapa itemId → oferta actual para mostrar en las tarjetas
   const [ofertasActuales, setOfertasActuales] = useState<Record<string, number>>({});
 
@@ -60,6 +164,7 @@ export default function CatalogoScreen() {
   const [enviandoPuja, setEnviandoPuja] = useState(false);
   const [errorPuja, setErrorPuja] = useState<string | null>(null);
   const [pujaExitosa, setPujaExitosa] = useState(false);
+  const [soyGanador, setSoyGanador] = useState(false);
 
   const ordenes = [
     { key: 'lote_numero', label: 'N° Lote' },
@@ -88,6 +193,51 @@ export default function CatalogoScreen() {
 
   useEffect(() => { if (token) fetchCatalogo(); }, [token, fetchCatalogo]);
 
+  // Helper para mapear niveles a ranking numérico
+  const rankOf = (lvl?: string | number) => {
+    if (!lvl && lvl !== 0) return 1;
+    const s = String(lvl)
+      .trim()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+    const digits = s.match(/\d+/);
+    if (digits?.[0]) {
+      const num = Number(digits[0]);
+      if (num >= 1 && num <= 5) return num;
+    }
+    if (s.includes('platino') || s.includes('platinum')) return 5;
+    if (s.includes('oro')) return 4;
+    if (s.includes('plata')) return 3;
+    if (s.includes('especial')) return 2;
+    if (s.includes('comun') || s.includes('base')) return 1;
+    switch (s) {
+      case 'base':
+      case 'comun':
+      case '1':
+        return 1;
+      case 'especial':
+      case '2':
+        return 2;
+      case 'plata':
+      case '3':
+        return 3;
+      case 'oro':
+      case '4':
+        return 4;
+      case 'platino':
+      case '5':
+        return 5;
+      default:
+        return 1;
+    }
+  };
+
+  const nivelUsuario = rankOf(nivel || 'base');
+  const rawReqSubasta = (subastaInfo as any)?.nivel_acceso ?? (subastaInfo as any)?.nivel ?? '';
+  const nivelReqSubasta = rankOf(rawReqSubasta || 'comun');
+  const subastaBloqueada = nivelUsuario < nivelReqSubasta;
+
   // Cuando cambian los artículos, trae las ofertas actuales de todos en paralelo
   useEffect(() => {
     if (!articulos.length || !token) return;
@@ -111,9 +261,11 @@ export default function CatalogoScreen() {
   }, [articulos, token]);
 
   // Trae el estado actual de pujas del ítem (oferta actual, historial)
-  const fetchEstadoPujas = async (itemId: string) => {
-    setCargandoPujas(true);
-    setEstadoPujas(null);
+  const fetchEstadoPujas = async (itemId: string, esInicial: boolean = false) => {
+    if (esInicial) {
+      setCargandoPujas(true);
+      setEstadoPujas(null);
+    }
     try {
       const res = await fetch(`${API_URL}/api/items/${itemId}/pujas`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -122,20 +274,36 @@ export default function CatalogoScreen() {
       if (!res.ok) return;
       const data: EstadoPujas = await res.json();
       setEstadoPujas(data);
+      setSoyGanador(data.es_ganadora === true);
     } catch {
       // silencioso
     } finally {
-      setCargandoPujas(false);
+      if (esInicial) setCargandoPujas(false);
     }
   };
 
+  const fetchEstadoPujasRef = useRef(fetchEstadoPujas);
+  fetchEstadoPujasRef.current = fetchEstadoPujas;
+
+  useEffect(() => {
+    if (!modalPujaVisible || !articuloSeleccionado?.id || !token) return;
+    const idItem = articuloSeleccionado.id;
+    fetchEstadoPujasRef.current(idItem);
+    const interval = setInterval(() => {
+      fetchEstadoPujasRef.current(idItem);
+    }, PUJAS_POLLING_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [modalPujaVisible, articuloSeleccionado?.id, token]);
+
   const handleAbrirPuja = (articulo: ArticuloItem) => {
+    if (subastaBloqueada) return; // prevenir apertura si nivel insuficiente
     setArticuloSeleccionado(articulo);
     setMontoPuja('');
     setErrorPuja(null);
     setPujaExitosa(false);
+    setSoyGanador(false);
     setModalPujaVisible(true);
-    fetchEstadoPujas(articulo.id);
+    fetchEstadoPujas(articulo.id, true);
   };
 
   const handleCerrarPuja = () => {
@@ -145,12 +313,17 @@ export default function CatalogoScreen() {
     setMontoPuja('');
     setErrorPuja(null);
     setPujaExitosa(false);
+    setSoyGanador(false);
     // Refresca el catálogo para actualizar precios
     fetchCatalogo();
   };
 
   const handleConfirmarPuja = async () => {
     if (!articuloSeleccionado) return;
+    if (esAutoPuja) {
+      setErrorPuja('Tu última puja es la ganadora. Esperá a que te superen.');
+      return;
+    }
     const monto = parseFloat(montoPuja.replace(/\./g, '').replace(',', '.'));
     if (isNaN(monto) || monto <= 0) {
       setErrorPuja('Ingresá un monto válido.');
@@ -174,11 +347,13 @@ export default function CatalogoScreen() {
           MONTO_INSUFICIENTE: `El monto mínimo es ${data.monto_minimo ? formatearPrecio(data.monto_minimo) : 'mayor a la oferta actual'}.`,
           MONTO_EXCEDE_LIMITE: 'El monto supera el límite máximo permitido para tu categoría.',
           USUARIO_EN_OTRA_SALA: 'Ya estás participando en otra subasta activa. Cerrá esa sesión primero.',
+          AUTO_PUJA: 'Tu última puja es la ganadora. Esperá a que te superen.',
         };
         setErrorPuja(mensajes[data.codigo] || data.error || 'No se pudo registrar la puja.');
         return;
       }
       // Puja exitosa
+      miUltimoMontoRef.current = monto;
       setPujaExitosa(true);
       setEstadoPujas(prev => prev ? { ...prev, oferta_actual: data.oferta_actual } : prev);
       // Actualiza la tarjeta del catálogo inmediatamente
@@ -213,15 +388,7 @@ export default function CatalogoScreen() {
   const formatearPrecio = (monto: number) =>
     `$ ${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(monto)}`;
 
-  const calcularTiempoRestante = (_fechaFin: string | undefined) => {
-    const ahora = new Date().getTime();
-    const fin = new Date(ahora + 12 * 60 * 60 * 1000 + 15 * 60 * 1000).getTime();
-    const diferencia = fin - ahora;
-    if (diferencia <= 0) return '00h 00m';
-    const horas = Math.floor((diferencia % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
-    return `${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
-  };
+  const esAutoPuja = soyGanador && miUltimoMontoRef.current > 0;
 
   const montoMinimo = estadoPujas
     ? estadoPujas.oferta_actual + (articuloSeleccionado ? articuloSeleccionado.precio_base * 0.01 : 0)
@@ -231,7 +398,7 @@ export default function CatalogoScreen() {
     <View style={styles.card}>
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => handleAbrirPuja(item)}
+        onPress={() => { if (!subastaBloqueada) handleAbrirPuja(item); }}
         style={styles.imageContainer}
       >
         <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="contain" />
@@ -240,10 +407,10 @@ export default function CatalogoScreen() {
             <Text style={styles.badgeEnVivoTexto}>EN VIVO</Text>
           </View>
         )}
-        <View style={styles.badgeRestan}>
-          <Text style={styles.badgeRestanLabel}>RESTAN</Text>
-          <Text style={styles.badgeRestanTexto}>{calcularTiempoRestante(undefined)}</Text>
-        </View>
+        <CountdownBadge
+          fechaInicio={subastaInfo?.fecha_inicio}
+          fechaFin={subastaInfo?.fecha_fin}
+        />
       </TouchableOpacity>
 
       <View style={styles.cardBody}>
@@ -262,8 +429,12 @@ export default function CatalogoScreen() {
             <Text style={styles.ofertaLabel}>OFERTA ACTUAL</Text>
             <Text style={styles.ofertaMonto}>{formatearPrecio(ofertasActuales[item.id] ?? item.precio_base)}</Text>
           </View>
-          <TouchableOpacity style={styles.pujarBtn} onPress={() => handleAbrirPuja(item)}>
-            <Text style={styles.pujarBtnTexto}>PUJAR</Text>
+          <TouchableOpacity
+            style={[styles.pujarBtn, subastaBloqueada && styles.pujarBtnDisabled]}
+            onPress={() => { if (!subastaBloqueada) handleAbrirPuja(item); }}
+            disabled={subastaBloqueada}
+          >
+            <Text style={[styles.pujarBtnTexto, subastaBloqueada && styles.pujarBtnTextoDisabled]}>PUJAR</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -310,6 +481,8 @@ export default function CatalogoScreen() {
           )}
         </View>
       )}
+
+      {subastaInfo && <CatalogoHeader subastaInfo={subastaInfo} articulosCount={articulos.length} />}
 
       <FlatList
         data={articulos}
@@ -409,7 +582,7 @@ export default function CatalogoScreen() {
                 {/* Historial de pujas (últimas 3) */}
                 {estadoPujas && estadoPujas.historial_pujas.length > 0 && (
                   <View style={styles.historialContainer}>
-                    <Text style={styles.historialTitulo}>ÚLTIMAS PUJAS</Text>
+                    <Text style={[styles.historialTitulo, { marginBottom: 10 }]}>ÚLTIMAS PUJAS</Text>
                     {estadoPujas.historial_pujas.slice(0, 3).map((puja, idx) => (
                       <View key={idx} style={styles.historialFila}>
                         <Text style={styles.historialPostor}>{puja.postor}</Text>
@@ -426,6 +599,22 @@ export default function CatalogoScreen() {
                   <View style={styles.pujaExitosaContainer}>
                     <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
                     <Text style={styles.pujaExitosaTexto}>¡Puja registrada! Estás ganando.</Text>
+                  </View>
+                )}
+
+                {/* Advertencia auto-puja */}
+                {esAutoPuja && (
+                  <View style={styles.autoPujaWarning}>
+                    <Ionicons name="information-circle-outline" size={18} color="#D97706" />
+                    <Text style={styles.autoPujaWarningTexto}>Tu última puja es la ganadora. Esperá a que te superen para volver a pujar.</Text>
+                  </View>
+                )}
+
+                {/* Banner persistente: estás ganando */}
+                {soyGanador && !esAutoPuja && (
+                  <View style={styles.bannerGanadorPersistente}>
+                    <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                    <Text style={styles.bannerGanadorPersistenteTexto}>Tu puja es la más alta</Text>
                   </View>
                 )}
 
@@ -458,9 +647,9 @@ export default function CatalogoScreen() {
                     )}
 
                     <TouchableOpacity
-                      style={[styles.pujaConfirmarBtn, enviandoPuja && styles.pujaConfirmarBtnDisabled]}
+                      style={[styles.pujaConfirmarBtn, (enviandoPuja || esAutoPuja) && styles.pujaConfirmarBtnDisabled]}
                       onPress={handleConfirmarPuja}
-                      disabled={enviandoPuja}
+                      disabled={enviandoPuja || esAutoPuja}
                     >
                       {enviandoPuja ? (
                         <ActivityIndicator size="small" color="#fff" />
@@ -495,14 +684,26 @@ const styles = StyleSheet.create({
   busquedaBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', gap: 8 },
   busquedaInput: { flex: 1, fontSize: 16, color: '#000', paddingVertical: 4 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 8, gap: 24 },
+  headerSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  estadoBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  estadoBadgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  headerTitulo: { fontSize: 24, fontWeight: '700', color: '#000', marginBottom: 10 },
+  headerMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  headerMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  headerMetaNum: { fontSize: 14, fontWeight: '700', color: '#000' },
+  headerMetaLabel: { fontSize: 12, color: '#888', fontWeight: '500' },
+  headerMetaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CCC', marginHorizontal: 4 },
   card: { width: '100%', backgroundColor: '#F8F9FA' },
   imageContainer: { width: '100%', height: 220, backgroundColor: '#EAEAEA', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   cardImagen: { width: '100%', height: '100%' },
   badgeEnVivo: { position: 'absolute', top: 12, left: 12, backgroundColor: '#000', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2 },
   badgeEnVivoTexto: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  badgeRestan: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(230,230,230,0.85)', paddingHorizontal: 16, paddingVertical: 10, borderTopLeftRadius: 8, minWidth: 90 },
-  badgeRestanLabel: { fontSize: 9, color: '#666', textAlign: 'center', marginBottom: 2, letterSpacing: 1 },
-  badgeRestanTexto: { fontSize: 14, color: '#000', fontWeight: '500', textAlign: 'center' },
   cardBody: { paddingHorizontal: 4 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   cardTitleContainer: { flex: 1, paddingRight: 16 },
@@ -515,6 +716,8 @@ const styles = StyleSheet.create({
   ofertaMonto: { fontSize: 18, fontWeight: '700', color: '#000' },
   pujarBtn: { backgroundColor: '#000', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 16 },
   pujarBtnTexto: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  pujarBtnDisabled: { opacity: 0.5 },
+  pujarBtnTextoDisabled: { color: '#fff' },
   // Modal orden
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '80%' },
@@ -544,12 +747,16 @@ const styles = StyleSheet.create({
   pujaEstadoDot: { width: 8, height: 8, borderRadius: 4 },
   pujaEstadoTexto: { fontSize: 13, fontWeight: '600', color: '#333' },
   historialContainer: { backgroundColor: '#F8F9FA', borderRadius: 12, padding: 14, marginBottom: 16 },
-  historialTitulo: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 10 },
+  historialTitulo: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1 },
   historialFila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#EEEEEE' },
   historialPostor: { fontSize: 14, color: '#555' },
   historialMonto: { fontSize: 14, fontWeight: '600', color: '#000' },
   pujaSeparador: { height: 1, backgroundColor: '#EEEEEE', marginBottom: 20 },
   pujaExitosaContainer: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 16 },
+  autoPujaWarning: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', padding: 12, borderRadius: 10, marginBottom: 16 },
+  autoPujaWarningTexto: { flex: 1, color: '#92400E', fontSize: 13, fontWeight: '600' },
+  bannerGanadorPersistente: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0FDF4', padding: 12, borderRadius: 10, marginBottom: 16 },
+  bannerGanadorPersistenteTexto: { color: '#16A34A', fontSize: 14, fontWeight: '700' },
   pujaExitosaTexto: { color: '#16A34A', fontSize: 14, fontWeight: '600' },
   pujaInputLabel: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1, marginBottom: 8 },
   pujaInputRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#000', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12 },

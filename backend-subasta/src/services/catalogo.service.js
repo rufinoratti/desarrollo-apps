@@ -58,11 +58,21 @@ const obtenerCatalogoPorSubastaLocal = ({ subastaId, q, orden }) => {
 
     articulos = sortArticulos(articulos, orden);
 
+    let fechaInicio = subasta.fecha_inicio || null;
+    let fechaFin = subasta.fecha_fin || null;
+    if (!fechaFin && fechaInicio) {
+        fechaFin = new Date(new Date(fechaInicio).getTime() + 3600 * 1000).toISOString();
+    }
+
     return {
         subasta_info: {
             id: String(subasta.id),
             titulo: subasta.titulo,
-            estado: subasta.estado
+            estado: subasta.estado,
+            nivel_acceso: subasta.nivel_acceso || subasta.categoria || null,
+            imagen_portada: subasta.imagen_portada || subasta.imagen || null,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin
         },
         articulos: articulos.map(({ tiempo_referencia, ...articulo }) => articulo),
         total_articulos: articulos.length
@@ -77,7 +87,7 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
 
     const { data: subasta, error: subastaError } = await supabase
         .from('subastas')
-        .select('identificador, estado, ubicacion')
+        .select('identificador, estado, ubicacion, categoria, nombre, imagen, fecha, hora')
         .eq('identificador', subastaIdNum)
         .maybeSingle();
 
@@ -103,8 +113,10 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
         return {
             subasta_info: {
                 id: String(subasta.identificador),
-                titulo: `Subasta #${subasta.identificador}`,
-                estado: estadoSubastaDbToApi(subasta.estado)
+                titulo: catalogo?.descripcion || `Subasta #${subasta.identificador}`,
+                estado: estadoSubastaDbToApi(subasta.estado),
+                nivel_acceso: subasta.categoria || null,
+                imagen_portada: subasta.imagen || null
             },
             articulos: [],
             total_articulos: 0
@@ -178,11 +190,20 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
 
     articulos = sortArticulos(articulos, orden);
 
+    const fechaInicioSub = subasta.fecha && subasta.hora ? `${subasta.fecha}T${subasta.hora}` : null;
+    const fechaFinSub = fechaInicioSub
+        ? new Date(new Date(fechaInicioSub).getTime() + 3600 * 1000).toISOString()
+        : null;
+
     return {
         subasta_info: {
             id: String(subasta.identificador),
             titulo: catalogo.descripcion || `Subasta #${subasta.identificador}`,
-            estado: estadoSubastaDbToApi(subasta.estado)
+            estado: estadoSubastaDbToApi(subasta.estado),
+            nivel_acceso: subasta.categoria || null,
+            imagen_portada: subasta.imagen || null,
+            fecha_inicio: fechaInicioSub,
+            fecha_fin: fechaFinSub
         },
         articulos: articulos.map(({ tiempo_referencia, ...articulo }) => articulo),
         total_articulos: articulos.length

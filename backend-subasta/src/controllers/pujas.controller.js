@@ -3,7 +3,7 @@ const pujasService = require('../services/pujas.service');
 const obtenerEstadoPujasItem = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const result = await pujasService.obtenerEstadoPujasItem({ itemId: id });
+        const result = await pujasService.obtenerEstadoPujasItem({ itemId: id, authUser: req.user });
         return res.status(200).json(result);
     } catch (error) {
         return next(error);
@@ -22,9 +22,18 @@ const realizarPuja = async (req, res, next) => {
     }
 };
 
-const listarPujasActuales = async (req, res, next) => {
+const obtenerPujasActuales = async (req, res, next) => {
     try {
-        const result = await pujasService.listarPujasActuales({ userId: req.user.id });
+        const result = await pujasService.obtenerPujasActuales({ authUser: req.user });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const obtenerPujasGanadas = async (req, res, next) => {
+    try {
+        const result = await pujasService.obtenerPujasGanadas({ authUser: req.user });
         return res.status(200).json(result);
     } catch (error) {
         return next(error);
@@ -34,5 +43,6 @@ const listarPujasActuales = async (req, res, next) => {
 module.exports = {
     obtenerEstadoPujasItem,
     realizarPuja,
-    listarPujasActuales
+    obtenerPujasActuales,
+    obtenerPujasGanadas
 };
