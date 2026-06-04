@@ -282,20 +282,26 @@ export default function PujasActuales() {
     fetchTodo(false);
   };
 
-  const handleActionNotificacion = (n: Notificacion) => {
-    if ((n.tipo === 'SUPERADA' || n.tipo === 'GANADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
+  const navegarNotificacion = (n: Notificacion) => {
+    if (n.tipo === 'GANADA' && n.itemId) {
+      router.push({ pathname: '/adjudicacion/[id]', params: { id: n.itemId } });
+      return;
+    }
+    if ((n.tipo === 'SUPERADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
       router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
-    } else if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
+      return;
+    }
+    if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
       router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     }
   };
 
+  const handleActionNotificacion = (n: Notificacion) => {
+    navegarNotificacion(n);
+  };
+
   const handlePressNotificacion = (n: Notificacion) => {
-    if ((n.tipo === 'SUPERADA' || n.tipo === 'GANADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.itemId) {
-      router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
-    } else if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
-      router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
-    }
+    navegarNotificacion(n);
   };
 
   if (cargando) {
