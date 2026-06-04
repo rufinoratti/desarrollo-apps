@@ -161,7 +161,7 @@ export default function SubastasScreen() {
   const fetchSubastas = async (pag: number, catId: number | null, append: boolean) => {
     if (pag === 1) setCargando(true); else setCargandoMas(true);
     try {
-      let url = `${API_URL}/api/subastas?pagina=${pag}&limite=10`;
+      let url = `${API_URL}/api/subastas?pagina=${pag}&limite=100`;
       if (catId) url += `&tematica=${catId}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },

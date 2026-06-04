@@ -236,7 +236,7 @@ const fetchCategorias = async () => {
     if (!shouldRefresh) setLoadingSubastas(true);
     try {
       if (!token) return;
-      const url = `${API_URL}/api/subastas?pagina=${page}&limite=10${catId ? `&tematica=${catId}` : ''}`;
+      const url = `${API_URL}/api/subastas?pagina=${page}&limite=100${catId ? `&tematica=${catId}` : ''}`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) return handleUnauthorized();
       const data = await res.json();
