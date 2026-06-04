@@ -288,6 +288,84 @@ app.get('/pujas/actuales', checkAuth, (req, res) => {
   }, DELAY);
 });
 
+const PS5_IMG = 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800';
+
+app.get('/api/pujas/actuales', checkAuth, (req, res) => {
+  setTimeout(() => {
+    res.status(200).json({
+      pujas: [
+        {
+          puja_id: 'uuid-puja-002',
+          item_id: 'uuid-item-002',
+          subasta_id: 'uuid-sub-002',
+          numero_lote: 'LOTE 002',
+          titulo: 'Rolex Submariner',
+          imagen: 'https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80&w=600',
+          monto_ofertado: 180000,
+          monto_actual: 180000,
+          es_ganadora: true,
+          tiempo_restante: '02:12:25',
+          estado_subasta: 'EN_VIVO',
+        },
+      ],
+    });
+  }, DELAY);
+});
+
+app.get('/api/notificaciones', checkAuth, (req, res) => {
+  setTimeout(() => {
+    res.status(200).json({
+      notificaciones: [
+        {
+          id_evento: 'adj-uuid-item-ps5',
+          tipo_evento: 'ADJUDICADO',
+          item_id: 'uuid-item-ps5',
+          titulo_lote: 'PLAYSTATION 5',
+          fecha_texto: 'Hace 2 horas',
+          monto: 585000,
+          etiqueta_monto: 'Ganaste por',
+          leida: false,
+        },
+      ],
+      total_no_leidas: 1,
+    });
+  }, DELAY);
+});
+
+app.post('/api/notificaciones/:id/leer', checkAuth, (req, res) => {
+  setTimeout(() => res.status(200).json({ mensaje: 'Notificación marcada como leída' }), DELAY);
+});
+
+app.get('/api/checkout/lotes/:itemId/liquidacion', checkAuth, (req, res) => {
+  setTimeout(() => {
+    const precio = 585000;
+    const comision = Math.round(precio * 0.1);
+    const iva = Math.round(comision * 0.21);
+    res.status(200).json({
+      item_id: req.params.itemId,
+      numero_lote: '412',
+      titulo: 'PLAYSTATION 5',
+      descripcion:
+        'Consola de videojuegos de novena generación de Sony, caracterizada por su SSD de ultra alta velocidad que elimina tiempos de carga, gráficos 4K fluidos hasta 120 fps.',
+      imagen: PS5_IMG,
+      subasta: {
+        id: 'uuid-sub-ps5',
+        titulo: 'Tecnología y Gaming Premium',
+        ubicacion: 'Buenos Aires, Recoleta (CABA)',
+        estado: 'FINALIZADA',
+      },
+      precio_final: precio,
+      comision,
+      comision_porcentaje: 10,
+      iva_sobre_comision: iva,
+      iva_porcentaje: 21,
+      total_a_pagar: precio + comision + iva,
+      estado_adjudicacion: 'ADJUDICADO',
+      estado_pago: 'PENDIENTE',
+    });
+  }, DELAY);
+});
+
 const PORT = 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mock server corriendo en http://0.0.0.0:${PORT}`);

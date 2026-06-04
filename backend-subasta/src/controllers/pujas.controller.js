@@ -22,7 +22,17 @@ const realizarPuja = async (req, res, next) => {
     }
 };
 
+const listarPujasActuales = async (req, res, next) => {
+    try {
+        const result = await pujasService.listarPujasActuales({ userId: req.user.id });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     obtenerEstadoPujasItem,
-    realizarPuja
+    realizarPuja,
+    listarPujasActuales
 };

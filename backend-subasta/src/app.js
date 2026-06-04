@@ -44,6 +44,8 @@ const pujasRoutes = require('./routes/pujas.routes');
 const perfilRoutes = require('./routes/perfil.routes');
 const adminRoutes = require('./routes/admin.routes');
 const misBienesRoutes = require('./routes/mis-bienes.routes');
+const notificacionesRoutes = require('./routes/notificaciones.routes');
+const checkoutRoutes = require('./routes/checkout.routes');
 const authController = require('./controllers/auth.controller');
 const errorHandler = require('./middlewares/errorHandler');
 
@@ -97,6 +99,8 @@ app.use('/api', pujasRoutes);
 app.use('/api', perfilRoutes);
 app.use('/api', adminRoutes);
 app.use('/api', misBienesRoutes);
+app.use('/api', notificacionesRoutes);
+app.use('/api', checkoutRoutes);
 
 // Sirve la página HTML de restablecer contraseña en la raíz
 // (Supabase redirige aquí desde el email de recuperación)

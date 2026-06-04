@@ -609,9 +609,74 @@ const cerrarSubastaYLiquidar = async () => {
     return { mensaje: 'Proceso de cierre disponible para integración transaccional' };
 };
 
+const formatTiempoRestante = (fechaFin) => {
+    if (!fechaFin) return '—';
+    const segundos = Math.max(0, Math.floor((new Date(fechaFin).getTime() - Date.now()) / 1000));
+    const h = Math.floor(segundos / 3600);
+    const m = Math.floor((segundos % 3600) / 60);
+    const s = segundos % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+const listarPujasActualesLocal = ({ userId }) => {
+    const pujas = [];
+
+    for (const subasta of store.subastas || []) {
+        const estadoSubasta = String(subasta.estado || '').toUpperCase();
+        if (estadoSubasta !== 'EN_VIVO') continue;
+
+        for (const item of subasta.items || []) {
+            const userBids = (store.bids || []).filter(
+                (b) => String(b.item_id) === String(item.id) && String(b.usuario_id) === String(userId)
+            );
+            if (!userBids.length) continue;
+
+            const itemBids = (store.bids || []).filter((b) => String(b.item_id) === String(item.id));
+            const ofertaActual = getOfertaActualFromList(itemBids, item.precio_base);
+            const userBest = userBids.reduce(
+                (max, b) => (Number(b.monto) > Number(max.monto) ? b : max),
+                userBids[0]
+            );
+            const highest = itemBids.reduce(
+                (max, b) => (Number(b.monto) > Number(max.monto) ? b : max),
+                itemBids[0]
+            );
+
+            pujas.push({
+                puja_id: String(userBest.id),
+                item_id: String(item.id),
+                subasta_id: String(subasta.id),
+                numero_lote: `LOTE #${item.numero_pieza}`,
+                titulo: item.descripcion,
+                imagen: item.imagenes?.[0] || null,
+                monto_ofertado: Number(userBest.monto),
+                monto_actual: Number(ofertaActual),
+                es_ganadora: highest && String(highest.usuario_id) === String(userId),
+                tiempo_restante: formatTiempoRestante(subasta.fecha_fin),
+                estado_subasta: estadoSubasta
+            });
+        }
+    }
+
+    return { pujas };
+};
+
+const listarPujasActuales = async ({ userId }) => {
+    if (!userId) {
+        throw new AppError('No autenticado', 401);
+    }
+
+    if (!isConfigured) {
+        return listarPujasActualesLocal({ userId });
+    }
+
+    return listarPujasActualesLocal({ userId });
+};
+
 module.exports = {
     obtenerEstadoPujasItem,
     realizarPuja,
+    listarPujasActuales,
     emitirNuevaPuja,
     cerrarSubastaYLiquidar
 };

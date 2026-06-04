@@ -10,4 +10,7 @@ router.get('/items/:id/pujas', authMiddleware, pujasController.obtenerEstadoPuja
 // POST /api/pujas
 router.post('/pujas', authMiddleware, pujasController.realizarPuja);
 
+// GET /api/pujas/actuales
+router.get('/pujas/actuales', authMiddleware, pujasController.listarPujasActuales);
+
 module.exports = router;

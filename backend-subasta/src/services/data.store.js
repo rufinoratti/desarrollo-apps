@@ -189,20 +189,45 @@ const store = {
         },
         {
             id: 's4',
-            titulo: 'Automóviles Clásicos — Temporada 2025',
-            categoria_id: 2,
-            categoria_nombre: 'Vehículos Clásicos',
+            titulo: 'Tecnología y Gaming Premium',
+            categoria_id: 7,
+            categoria_nombre: 'Coleccionables',
             nivel_acceso: 'comun',
             estado: 'FINALIZADA',
             moneda: 'ARS',
-            imagen_portada: 'https://cdn.rematix.com/subastas/autos-clasicos.jpg',
-            ubicacion: 'Mendoza',
+            imagen_portada: 'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800',
+            ubicacion: 'Buenos Aires, Recoleta (CABA)',
             rematador: 'Martillero 4',
             fecha_inicio: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-            fecha_fin: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-            precio_base_minimo: 800000,
-            total_items: 0,
-            items: []
+            fecha_fin: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+            precio_base_minimo: 500000,
+            total_items: 1,
+            items: [
+                {
+                    id: 'i412',
+                    numero_pieza: '412',
+                    descripcion: 'PLAYSTATION 5',
+                    descripcion_detallada:
+                        'Consola de videojuegos de novena generación de Sony, caracterizada por su SSD de ultra alta velocidad que elimina tiempos de carga, gráficos 4K fluidos hasta 120 fps.',
+                    precio_base: 500000,
+                    ultima_oferta: 585000,
+                    duenio_actual_id: 'duenio-4',
+                    duenio_nombre: 'Electrónica Premium SA',
+                    vendido: true,
+                    ganador_usuario_id: 'u1',
+                    estado_pago: 'PENDIENTE',
+                    ficha_tecnica: {
+                        Marca: 'Sony',
+                        Modelo: 'CFI-1215A',
+                        Almacenamiento: '825 GB SSD',
+                        Estado: 'Nuevo, sellado de fábrica'
+                    },
+                    imagenes: [
+                        'https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800',
+                        'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?q=80&w=800'
+                    ]
+                }
+            ]
         }
     ],
 
@@ -215,6 +240,14 @@ const store = {
             usuario_id: 'u1',
             monto: 15000,
             fecha_puja: nowIso
+        },
+        {
+            id: 'b2',
+            subasta_id: 's4',
+            item_id: 'i412',
+            usuario_id: 'u1',
+            monto: 585000,
+            fecha_puja: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
         }
     ],
 
