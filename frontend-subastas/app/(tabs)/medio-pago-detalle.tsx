@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { Skeleton, SkeletonCircle, SkeletonLine } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 type MedioDetalle = {
@@ -58,9 +59,32 @@ export default function MedioPagoDetalle() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#000" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/billetera')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.logo}>REMATIX</Text>
+          <View style={{ width: 24 }} />
         </View>
+
+        <ScrollView contentContainerStyle={styles.content}>
+          <View style={styles.iconContainer}>
+            <SkeletonCircle size={80} />
+          </View>
+          <View style={{ alignItems: 'center', marginBottom: 25, gap: 10 }}>
+            <SkeletonLine width={180} height={20} />
+            <Skeleton width={90} height={22} borderRadius={10} />
+          </View>
+
+          <View style={styles.detailCard}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.detailRow}>
+                <SkeletonLine width={90} height={12} />
+                <SkeletonLine width={120} height={14} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }

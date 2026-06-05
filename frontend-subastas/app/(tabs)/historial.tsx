@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { Skeleton, SkeletonCircle, SkeletonLine } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 type EstadoItem = 'OK' | 'PENDIENTE' | 'ADVERTENCIA';
@@ -204,8 +205,35 @@ export default function EstadoCuentaScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <Header />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#000" />
+        <View style={styles.content}>
+          <Text style={styles.subtitle}>ESTADO DE CUENTA</Text>
+          <Text style={styles.title}>Verificación de cuenta</Text>
+
+          <View style={styles.heroContainer}>
+            <SkeletonCircle size={120} style={{ marginBottom: 20 }} />
+            <Skeleton width={140} height={28} borderRadius={14} style={{ marginBottom: 12 }} />
+            <SkeletonLine width={260} height={16} style={{ marginBottom: 8 }} />
+            <SkeletonLine width={140} height={12} />
+          </View>
+
+          <View style={styles.scoreRow}>
+            <Skeleton width={70} height={28} borderRadius={14} />
+            <Skeleton width={110} height={28} borderRadius={14} />
+          </View>
+
+          <Text style={styles.sectionTitle}>DETALLE DE VERIFICACIÓN</Text>
+          <View style={{ gap: 8, marginBottom: 25 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.itemRow}>
+                <Skeleton width={36} height={36} borderRadius={18} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <SkeletonLine width="50%" height={13} style={{ marginBottom: 6 }} />
+                  <SkeletonLine width="80%" height={11} />
+                </View>
+                <Skeleton width={50} height={20} borderRadius={10} />
+              </View>
+            ))}
+          </View>
         </View>
       </SafeAreaView>
     );

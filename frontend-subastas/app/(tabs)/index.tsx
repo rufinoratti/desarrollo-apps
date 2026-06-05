@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, RefreshContr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
+import { Skeleton } from '@/src/components/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/src/config/env';
 import CountdownBadge from '@/src/components/CountdownBadge';
@@ -24,21 +25,6 @@ type Subasta = {
   estado?: string;
   fecha_inicio?: string;
   fecha_fin?: string;
-};
-
-const Skeleton = ({ width, height, borderRadius, style }: any) => {
-  const [anim] = useState(new Animated.Value(0.3));
-  
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, { toValue: 0.7, duration: 800, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [anim]);
-
-  return <Animated.View style={[{ width, height, borderRadius, backgroundColor: '#E0E0E0', opacity: anim }, style]} />;
 };
 
 function getDisplayStatus(item: Subasta): string {

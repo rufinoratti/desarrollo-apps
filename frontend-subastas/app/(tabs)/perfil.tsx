@@ -19,6 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/src/context/AuthContext';
 import { Button } from '@/src/components/Button';
+import { SkeletonCircle, SkeletonLine } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 interface PerfilData {
@@ -401,8 +402,32 @@ export default function Perfil() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#000" style={{ flex: 1 }} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerBack} />
+          <Text style={styles.headerTitle}>REMATIX</Text>
+          <View style={styles.headerBack} />
+        </View>
+        <View style={{ padding: 20 }}>
+          <View style={{ alignItems: 'center', marginBottom: 30 }}>
+            <SkeletonCircle size={100} />
+            <View style={{ height: 16 }} />
+            <SkeletonLine width={180} height={18} />
+            <View style={{ height: 8 }} />
+            <SkeletonLine width={100} height={12} />
+          </View>
+          <View style={{ gap: 14, marginBottom: 25 }}>
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+          </View>
+          <View style={{ gap: 8 }}>
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }

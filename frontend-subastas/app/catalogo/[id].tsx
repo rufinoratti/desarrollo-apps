@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import { Skeleton } from '@/src/components/Skeleton';
 import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
 import CountdownBadge from '@/src/components/CountdownBadge';
 
@@ -449,8 +450,27 @@ export default function CatalogoScreen() {
 
   if (cargando && articulos.length === 0) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>REMATIX</Text>
+          <View style={styles.headerAction} />
+        </View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+          <Skeleton width="100%" height={140} borderRadius={14} style={{ marginBottom: 12 }} />
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+            <Skeleton width="30%" height={32} borderRadius={16} />
+            <Skeleton width="30%" height={32} borderRadius={16} />
+            <Skeleton width="30%" height={32} borderRadius={16} />
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} width="48%" height={180} borderRadius={12} />
+            ))}
+          </View>
+        </View>
       </SafeAreaView>
     );
   }

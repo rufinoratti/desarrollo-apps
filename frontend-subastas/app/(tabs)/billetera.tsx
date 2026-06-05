@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { SkeletonList } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 type MedioPago = {
@@ -133,8 +134,19 @@ export default function Billetera() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#000" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.logo}>REMATIX</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <Text style={styles.subtitle}>GESTIÓN DE FONDOS</Text>
+        <Text style={styles.title}>Administrar Medios de Pago</Text>
+
+        <View style={styles.list}>
+          <SkeletonList rows={4} gap={12} />
         </View>
       </SafeAreaView>
     );

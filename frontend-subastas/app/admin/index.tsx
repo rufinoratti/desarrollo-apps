@@ -11,7 +11,6 @@ import {
   Platform,
   Modal,
   LayoutAnimation,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -21,6 +20,7 @@ import { API_URL } from '@/src/config/env';
 import { Button } from '@/src/components/Button';
 import { Input } from '@/src/components/Input';
 import { Select } from '@/src/components/Select';
+import { SkeletonList } from '@/src/components/Skeleton';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
@@ -561,9 +561,8 @@ export default function AdminPanel() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color="#0F172A" />
-            <Text style={styles.loadingText}>Cargando datos...</Text>
+          <View style={styles.section}>
+            <SkeletonList rows={4} gap={10} />
           </View>
         ) : null}
 

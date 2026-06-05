@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
 import CountdownBadge from '@/src/components/CountdownBadge';
+import { Skeleton, SkeletonList } from '@/src/components/Skeleton';
 
 interface Categoria {
   id: number;
@@ -305,8 +306,16 @@ export default function SubastasScreen() {
 
   if (cargando && subastas.length === 0) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitulo}>SUBASTAS</Text>
+        </View>
+        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+          <Skeleton width="100%" height={40} borderRadius={8} style={{ marginBottom: 12 }} />
+        </View>
+        <View style={{ paddingHorizontal: 20 }}>
+          <SkeletonList rows={5} gap={14} />
+        </View>
       </SafeAreaView>
     );
   }

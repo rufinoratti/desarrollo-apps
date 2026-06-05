@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
@@ -9,6 +9,7 @@ import { NOTIFICACIONES_POLLING_INTERVAL_MS } from '@/src/config/polling';
 import NotificacionCard, { Notificacion } from '@/src/components/NotificacionCard';
 import ToastOutbid from '@/src/components/ToastOutbid';
 import { useToast } from '@/src/hooks/useToast';
+import { SkeletonList } from '@/src/components/Skeleton';
 
 const INTERVALOS_CIERRE = [45, 30, 15];
 
@@ -304,8 +305,17 @@ export default function PujasActuales() {
 
   if (cargando) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>NOTIFICACIONES</Text>
+          <View style={styles.backButton} />
+        </View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+          <SkeletonList rows={4} gap={12} />
+        </View>
       </SafeAreaView>
     );
   }

@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { API_URL } from '@/src/config/env';
 import { Input } from '@/src/components/Input';
 import { Select } from '@/src/components/Select';
+import { SkeletonCircle, SkeletonLine } from '@/src/components/Skeleton';
 import { Button } from '@/src/components/Button';
 
 interface OpcionItem {
@@ -148,8 +149,28 @@ export default function AgregarProductoScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#000" style={{ flex: 1 }} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>AGREGAR PRODUCTO</Text>
+          <View style={styles.headerBack} />
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20 }}>
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            <SkeletonCircle size={150} />
+          </View>
+          <View style={{ gap: 14 }}>
+            <SkeletonLine width="100%" height={50} borderRadius={8} />
+            <SkeletonLine width="100%" height={80} borderRadius={8} />
+            <SkeletonLine width="100%" height={50} borderRadius={8} />
+            <SkeletonLine width="100%" height={50} borderRadius={8} />
+            <SkeletonLine width="100%" height={50} borderRadius={8} />
+            <SkeletonLine width="100%" height={50} borderRadius={8} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }

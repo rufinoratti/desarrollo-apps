@@ -1,5 +1,5 @@
 import {
-  View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   Image, FlatList, ScrollView, Share, Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import { Skeleton, SkeletonLine } from '@/src/components/Skeleton';
 import { PUJAS_POLLING_INTERVAL_MS } from '@/src/config/polling';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -146,8 +147,34 @@ export default function ProductoScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>REMATIX</Text>
+          <View style={styles.headerBack} />
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+          <Skeleton width="100%" height={300} style={{ marginBottom: 20 }} />
+          <View style={{ paddingHorizontal: 20 }}>
+            <SkeletonLine width="80%" height={22} style={{ marginBottom: 10 }} />
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <Skeleton width={90} height={26} borderRadius={13} />
+              <Skeleton width={120} height={26} borderRadius={13} />
+            </View>
+            <SkeletonLine width="100%" height={14} style={{ marginBottom: 6 }} />
+            <SkeletonLine width="95%" height={14} style={{ marginBottom: 6 }} />
+            <SkeletonLine width="85%" height={14} style={{ marginBottom: 20 }} />
+            <SkeletonLine width="60%" height={16} style={{ marginBottom: 12 }} />
+            <View style={{ gap: 10, marginBottom: 20 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} width="100%" height={50} borderRadius={10} />
+              ))}
+            </View>
+            <Skeleton width="100%" height={56} borderRadius={12} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
