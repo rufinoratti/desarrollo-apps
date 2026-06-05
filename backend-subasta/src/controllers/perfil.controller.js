@@ -54,6 +54,15 @@ const obtenerRestricciones = async (req, res, next) => {
     }
 };
 
+const obtenerEstadoCuenta = async (req, res, next) => {
+    try {
+        const result = await perfilService.obtenerEstadoCuenta(req.user);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 const registrarComoDuenio = async (req, res, next) => {
     try {
         const result = await perfilService.registrarComoDuenio(req.user);
@@ -70,5 +79,6 @@ module.exports = {
     eliminarFotoPerfil,
     obtenerEstadisticas,
     obtenerRestricciones,
+    obtenerEstadoCuenta,
     registrarComoDuenio
 };

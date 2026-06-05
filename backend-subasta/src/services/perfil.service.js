@@ -117,11 +117,22 @@ const fetchPersonaClienteSupabase = async (clienteId) => {
         throw new AppError('Error al obtener datos personales: ' + personaError.message, 500);
     }
 
-    const { data: cliente, error: clienteError } = await supabase
+    let clienteData = null;
+    let clienteError = null;
+
+    ({ data: clienteData, error: clienteError } = await supabase
         .from('clientes')
-        .select('categoria, numeropais')
+        .select('categoria, numeropais, admitido')
         .eq('identificador', clienteId)
-        .maybeSingle();
+        .maybeSingle());
+
+    if (clienteError && /column .*admitido/i.test(clienteError.message || '')) {
+        ({ data: clienteData, error: clienteError } = await supabase
+            .from('clientes')
+            .select('categoria, numeropais')
+            .eq('identificador', clienteId)
+            .maybeSingle());
+    }
 
     if (clienteError) {
         throw new AppError('Error al obtener datos de cliente: ' + clienteError.message, 500);
@@ -129,7 +140,7 @@ const fetchPersonaClienteSupabase = async (clienteId) => {
 
     return {
         persona: personaData,
-        cliente
+        cliente: clienteData
     };
 };
 
@@ -458,6 +469,310 @@ const obtenerRestricciones = async (authUser) => {
     return obtenerRestriccionesSupabase(authUser);
 };
 
+const construirEstadoCuenta = (data) => {
+    const {
+        usuario,
+        verificacion,
+        completitud,
+        cuenta_cobro,
+        es_duenio,
+        restriccion,
+        timestamp
+    } = data;
+
+    const items = [];
+    let puntosOk = 0;
+    let puntosPendientes = 0;
+    let puntosAdvertencia = 0;
+    const totalPuntos = 9;
+
+    items.push({
+        id: 'identidad',
+        label: 'Identidad verificada',
+        status: completitud.documento ? 'OK' : 'PENDIENTE',
+        detalle: completitud.documento
+            ? `DNI ${completitud.documento}`.trim()
+            : 'Cargá tu documento para operar'
+    });
+    if (completitud.documento) puntosOk++; else puntosPendientes++;
+
+    items.push({
+        id: 'email',
+        label: 'Email registrado',
+        status: completitud.email ? 'OK' : 'PENDIENTE',
+        detalle: completitud.email || 'Sin email'
+    });
+    if (completitud.email) puntosOk++; else puntosPendientes++;
+
+    items.push({
+        id: 'telefono',
+        label: 'Teléfono registrado',
+        status: completitud.telefono ? 'OK' : 'PENDIENTE',
+        detalle: completitud.telefono || 'Agregá un teléfono de contacto'
+    });
+    if (completitud.telefono) puntosOk++; else puntosPendientes++;
+
+    items.push({
+        id: 'direccion',
+        label: 'Domicilio registrado',
+        status: completitud.direccion ? 'OK' : 'PENDIENTE',
+        detalle: completitud.direccion || 'Cargá tu dirección'
+    });
+    if (completitud.direccion) puntosOk++; else puntosPendientes++;
+
+    items.push({
+        id: 'categoria',
+        label: 'Categoría asignada',
+        status: verificacion.categoria ? 'OK' : 'PENDIENTE',
+        detalle: verificacion.categoria
+            ? `Nivel ${verificacion.categoria}`
+            : 'Pendiente de aprobación'
+    });
+    verificacion.categoria ? puntosOk++ : puntosPendientes++;
+
+    if (cuenta_cobro) {
+        items.push({
+            id: 'banco',
+            label: 'Cuenta bancaria',
+            status: cuenta_cobro.estado_verificacion === 'VERIFICADA' ? 'OK' : 'PENDIENTE',
+            detalle: `${cuenta_cobro.entidad_bancaria || 'Banco'} · ${cuenta_cobro.numero_cbu || '—'}${cuenta_cobro.estado_verificacion === 'VERIFICADA' ? ' (Verificada)' : ' (En revisión)'}`
+        });
+        cuenta_cobro.estado_verificacion === 'VERIFICADA' ? puntosOk++ : puntosPendientes++;
+    } else {
+        items.push({
+            id: 'banco',
+            label: 'Cuenta bancaria',
+            status: 'PENDIENTE',
+            detalle: 'Agregá un medio de cobro para recibir pagos'
+        });
+        puntosPendientes++;
+    }
+
+    items.push({
+        id: 'duenio',
+        label: 'Registrada como dueño',
+        status: es_duenio ? 'OK' : 'PENDIENTE',
+        detalle: es_duenio
+            ? 'Habilitada para vender en subastas'
+            : 'Opcional · Te permite publicar productos'
+    });
+    es_duenio ? puntosOk++ : puntosPendientes++;
+
+    items.push({
+        id: 'deuda',
+        label: 'Sin deudas pendientes',
+        status: restriccion.activa ? 'ADVERTENCIA' : 'OK',
+        detalle: restriccion.activa
+            ? `Adeuda ${restriccion.monto_regularizar.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })}`
+            : 'Sin movimientos impagos'
+    });
+    if (restriccion.activa) {
+        puntosAdvertencia++;
+    } else {
+        puntosOk++;
+    }
+
+    items.push({
+        id: 'estado',
+        label: 'Cuenta habilitada',
+        status: verificacion.admitido === 'si' ? 'OK' : (verificacion.admitido === 'no' ? 'ADVERTENCIA' : 'PENDIENTE'),
+        detalle: verificacion.admitido === 'si'
+            ? 'Aprobada por administración'
+            : verificacion.admitido === 'no'
+                ? 'Cuenta rechazada · contactanos'
+                : 'En revisión por administración'
+    });
+    if (verificacion.admitido === 'si') {
+        puntosOk++;
+    } else if (verificacion.admitido === 'no') {
+        puntosAdvertencia++;
+    } else {
+        puntosPendientes++;
+    }
+
+    let estadoGeneral = 'CORRECTO';
+    let mensajePrincipal = 'Tu cuenta está verificada y al día';
+
+    if (verificacion.admitido === 'no') {
+        estadoGeneral = 'BLOQUEADO';
+        mensajePrincipal = 'Tu cuenta está bloqueada. Contactá a soporte.';
+    } else if (restriccion.activa) {
+        estadoGeneral = 'CON_DEUDA';
+        mensajePrincipal = 'Tenés una deuda pendiente. Regularizá para operar.';
+    } else if (verificacion.admitido === null) {
+        estadoGeneral = 'EN_REVISION';
+        mensajePrincipal = 'Tu cuenta está en revisión por administración.';
+    }
+
+    return {
+        estado_general: estadoGeneral,
+        mensaje_principal: mensajePrincipal,
+        timestamp_verificacion: timestamp,
+        usuario: {
+            id: String(usuario.id),
+            nombre_completo: usuario.nombre_completo || null,
+            email: usuario.email || null,
+            categoria: usuario.categoria || null,
+            foto_url: usuario.foto_url || null
+        },
+        verificacion: {
+            admitido: verificacion.admitido,
+            categoria: verificacion.categoria,
+            bloqueado: verificacion.bloqueado
+        },
+        cuenta_cobro: cuenta_cobro
+            ? {
+                entidad_bancaria: cuenta_cobro.entidad_bancaria,
+                numero_cbu: cuenta_cobro.numero_cbu,
+                estado_verificacion: cuenta_cobro.estado_verificacion,
+                es_principal: cuenta_cobro.es_principal
+            }
+            : null,
+        es_duenio: es_duenio,
+        items: items,
+        resumen: {
+            puntos_ok: puntosOk,
+            puntos_pendientes: puntosPendientes,
+            puntos_advertencia: puntosAdvertencia,
+            total_puntos: totalPuntos
+        }
+    };
+};
+
+const obtenerEstadoCuentaLocal = (authUser) => {
+    const user = getLocalUser(authUser);
+
+    const cuentaBancaria = (user.medios_pago || []).find((m) => {
+        const tipo = String(m.tipo || '').toLowerCase();
+        return tipo === 'cuenta_bancaria' || tipo === 'cuenta bancaria';
+    }) || null;
+
+    const esDuenio = (store.duenios || []).some((d) => String(d.identificador) === String(user.id));
+
+    const morosa = (store.registroDeSubasta || []).find((r) => {
+        const sameClient = String(r.cliente_id || r.cliente) === String(user.id);
+        const impago = String(r.estado_cobro || '').toLowerCase() === 'impago';
+        return sameClient && impago;
+    });
+
+    let restriccionActiva = false;
+    let motivo = null;
+    let montoRegularizar = 0;
+    if (morosa) {
+        restriccionActiva = true;
+        motivo = 'Falta de pago en subasta. Debe regularizar su situación para continuar operando.';
+        const monto = Number(morosa.importe || 0);
+        montoRegularizar = Number((monto * 0.10).toFixed(2));
+    }
+
+    const categoriaStr = String(user.categoria || '').toLowerCase();
+    const estadoValidacion = String(user.estado_validacion || '').toUpperCase();
+    let admitido;
+    if (estadoValidacion === 'APROBADO') admitido = 'si';
+    else if (estadoValidacion === 'RECHAZADO') admitido = 'no';
+    else admitido = null;
+
+    return construirEstadoCuenta({
+        usuario: {
+            id: user.id,
+            nombre_completo: user.nombre_completo || user.nombre || null,
+            email: user.email || null,
+            categoria: categoriaStr ? categoriaStr.toUpperCase() : null,
+            foto_url: user.foto_perfil || null
+        },
+        verificacion: {
+            admitido,
+            categoria: categoriaStr ? categoriaStr.toUpperCase() : null,
+            bloqueado: !!user.bloqueado
+        },
+        completitud: {
+            documento: user.documento || null,
+            email: user.email || null,
+            telefono: user.telefono || null,
+            direccion: user.domicilio_legal || user.direccion || null,
+            foto_perfil: user.foto_perfil || null
+        },
+        cuenta_cobro: parseCuentaCobro(cuentaBancaria),
+        es_duenio: esDuenio,
+        restriccion: {
+            activa: restriccionActiva,
+            motivo,
+            monto_regularizar: montoRegularizar
+        },
+        timestamp: new Date().toISOString()
+    });
+};
+
+const obtenerEstadoCuentaSupabase = async (authUser) => {
+    const clienteId = await resolveClienteIdSupabase(authUser);
+    const { persona, cliente } = await fetchPersonaClienteSupabase(clienteId);
+
+    const { data: cuenta, error: cuentaError } = await supabase
+        .from('mediosdepago')
+        .select('identificador, tipo, entidad, verificado, es_principal, detalles_enmascarados')
+        .eq('cliente_id', clienteId)
+        .eq('tipo', 'cuenta_bancaria')
+        .order('identificador', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+    if (cuentaError) {
+        throw new AppError('Error al obtener cuenta de cobro: ' + cuentaError.message, 500);
+    }
+
+    const { data: duenioRow } = await supabase
+        .from('duenios')
+        .select('identificador')
+        .eq('identificador', clienteId)
+        .maybeSingle();
+
+    const { data: registroRows } = await supabase
+        .from('registrodesubasta')
+        .select('identificador, cliente')
+        .eq('cliente', clienteId)
+        .limit(1);
+
+    const categoria = cliente?.categoria ? String(cliente.categoria).toUpperCase() : null;
+    const cuentaCobro = parseCuentaCobro(cuenta);
+
+    return construirEstadoCuenta({
+        usuario: {
+            id: persona?.identificador || clienteId,
+            nombre_completo: persona?.nombre || null,
+            email: persona?.email || null,
+            categoria,
+            foto_url: persona?.foto_perfil || null
+        },
+        verificacion: {
+            admitido: cliente == null ? null : (String(cliente.admitido || '').toLowerCase() === 'si' ? 'si' : (String(cliente.admitido || '').toLowerCase() === 'no' ? 'no' : null)),
+            categoria,
+            bloqueado: false
+        },
+        completitud: {
+            documento: persona?.documento || null,
+            email: persona?.email || null,
+            telefono: persona?.telefono || null,
+            direccion: persona?.direccion || null,
+            foto_perfil: persona?.foto_perfil || null
+        },
+        cuenta_cobro: cuentaCobro,
+        es_duenio: !!duenioRow,
+        restriccion: {
+            activa: false,
+            motivo: null,
+            monto_regularizar: 0
+        },
+        timestamp: new Date().toISOString()
+    });
+};
+
+const obtenerEstadoCuenta = async (authUser) => {
+    if (!isConfigured) {
+        return obtenerEstadoCuentaLocal(authUser);
+    }
+    return obtenerEstadoCuentaSupabase(authUser);
+};
+
 const registrarComoDuenio = async (authUser) => {
     const clienteId = await resolveClienteIdSupabase(authUser);
 
@@ -510,5 +825,6 @@ module.exports = {
     eliminarFotoPerfil,
     obtenerEstadisticas,
     obtenerRestricciones,
+    obtenerEstadoCuenta,
     registrarComoDuenio
 };
