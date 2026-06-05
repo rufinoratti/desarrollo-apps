@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Modal, Pressable, Alert, Image, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
@@ -67,6 +67,10 @@ export default function PujasActuales() {
   const [secciones, setSecciones] = useState<Seccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedGanado, setSelectedGanado] = useState<Notificacion | null>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<'retiro' | 'envio'>('retiro');
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const paidItemsRef = useRef<Set<string>>(new Set());
 
   const pujasSnapshotRef = useRef<Map<string, boolean>>(new Map());
   const toastMostradoRef = useRef<Set<string>>(new Set());
@@ -294,13 +298,50 @@ export default function PujasActuales() {
   };
 
   const handlePressNotificacion = (n: Notificacion) => {
-    if (n.tipo === 'GANADA' && n.itemId) {
-      router.push({ pathname: '/producto/[id]', params: { id: n.itemId } });
+    // ensure payment state is reset whenever user opens a ganado modal
+    setPaymentConfirmed(false);
+    if (n.tipo === 'GANADA') {
+      const itemKey = String(n.itemId ?? n.id ?? '');
+      if (paidItemsRef.current.has(itemKey)) {
+        Alert.alert('Operación ya completada', 'El pago de este lote ya fue confirmado.');
+        return;
+      }
+      setSelectedGanado(n);
     } else if ((n.tipo === 'SUPERADA' || n.tipo === 'CIERRE_INMINENTE' || n.tipo === 'GANANDO') && n.subastaId) {
       router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     } else if (n.tipo === 'SUBASTA_INICIADA' && n.subastaId) {
       router.push({ pathname: '/catalogo/[id]', params: { id: n.subastaId, titulo: n.lote || '' } });
     }
+  };
+
+  const ganados = secciones.flatMap((s) => s.data.filter((n) => n.tipo === 'GANADA'));
+  const selectedMonto = selectedGanado?.monto ?? 0;
+  const comision = Math.round(selectedMonto * 0.1);
+  const iva = Math.round(comision * 0.21);
+  const totalPagar = selectedMonto + comision + iva;
+
+  const handleSelectDelivery = (option: 'retiro' | 'envio') => {
+    setSelectedDelivery(option);
+  };
+
+  const handleConfirmPago = () => {
+    // mark as paid for this selected item so user can't re-open the flow
+    if (selectedGanado) {
+      const key = String(selectedGanado.itemId ?? selectedGanado.id ?? '');
+      paidItemsRef.current.add(key);
+    }
+    setPaymentConfirmed(true);
+  };
+
+  const handleCloseSuccess = () => {
+    setPaymentConfirmed(false);
+    setSelectedGanado(null);
+    router.push('/(tabs)');
+  };
+
+  const handleSelectGanado = (ganado: Notificacion) => {
+    setSelectedGanado(ganado);
+    setPaymentConfirmed(false);
   };
 
   if (cargando) {
@@ -380,6 +421,128 @@ export default function PujasActuales() {
           }
         }}
       />
+
+      <Modal visible={!!selectedGanado} transparent animationType="slide" onRequestClose={() => { setSelectedGanado(null); setPaymentConfirmed(false); }}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalStatus}>¡FELICIDADES!</Text>
+                <Text style={styles.modalSubtitle}>Has ganado el lote {selectedGanado?.lote ?? ''}</Text>
+              </View>
+              <Pressable onPress={() => { setSelectedGanado(null); setPaymentConfirmed(false); }} style={styles.modalCloseButton}>
+                <Ionicons name="close" size={22} color="#000" />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              {paymentConfirmed ? (
+                <View style={styles.successContent}>
+                  <View style={styles.successIconContainer}>
+                    <Ionicons name="checkmark-circle" size={52} color="#10B981" />
+                  </View>
+                  <Text style={styles.successTitle}>¡PAGO CONFIRMADO!</Text>
+                  <Text style={styles.successSubtitle}>
+                    Tu compra del {selectedGanado?.lote ?? 'lote'} fue procesada exitosamente.
+                  </Text>
+                  <View style={styles.successCard}>
+                    <Ionicons name="cube-outline" size={18} color="#111" />
+                    <Text style={styles.successCardText}>
+                      Recibirás un email con el presupuesto de envío en las próximas 24 horas.
+                    </Text>
+                  </View>
+                  <Text style={styles.successReference}>N° de referencia: {selectedGanado ? `RMX-${String(selectedGanado.itemId).padStart(7, '0')}` : 'RMX-0000000'}</Text>
+                  <TouchableOpacity style={styles.confirmButton} activeOpacity={0.85} onPress={handleCloseSuccess}>
+                    <Text style={styles.confirmButtonText}>IR AL INICIO</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.productoCard}>
+                    {selectedGanado?.imagen ? (
+                      <Image source={{ uri: selectedGanado.imagen }} style={styles.productoImagen} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.productoImagenPlaceholder} />
+                    )}
+                    <Text style={styles.productoTitulo} numberOfLines={2}>{selectedGanado?.titulo}</Text>
+                    <Text style={styles.productoDescripcion} numberOfLines={3}>{selectedGanado?.descripcion}</Text>
+                  </View>
+
+                  <View style={styles.resumenCard}>
+                    <Text style={styles.resumenLabel}>RESUMEN DE LIQUIDACIÓN</Text>
+                    <View style={styles.resumenRow}>
+                      <Text style={styles.resumenTexto}>Precio Final</Text>
+                      <Text style={styles.resumenValor}>{selectedMonto > 0 ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(selectedMonto) : '-'} </Text>
+                    </View>
+                    <View style={styles.resumenRow}>
+                      <Text style={styles.resumenTexto}>Comisiones (10%)</Text>
+                      <Text style={styles.resumenValor}>{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(comision)}</Text>
+                    </View>
+                    <View style={styles.resumenRow}>
+                      <Text style={styles.resumenTexto}>IVA sobre comisiones (21%)</Text>
+                      <Text style={styles.resumenValor}>{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(iva)}</Text>
+                    </View>
+                    <View style={styles.resumenDivider} />
+                    <View style={styles.resumenRow}> 
+                      <Text style={[styles.resumenTexto, styles.totalTexto]}>TOTAL A PAGAR</Text>
+                      <Text style={[styles.resumenValor, styles.totalTexto]}>{new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(totalPagar)}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.sectionTitleModal}>MÉTODO DE ENTREGA</Text>
+                  <View style={styles.deliveryOptions}>
+                    <TouchableOpacity
+                      style={[styles.deliveryCard, selectedDelivery === 'retiro' && styles.deliveryCardSelected]}
+                      activeOpacity={0.85}
+                      onPress={() => handleSelectDelivery('retiro')}
+                    >
+                      <Text style={styles.deliveryTitle}>Retiro en Sucursal</Text>
+                      <Text style={styles.deliverySubtitle}>Buenos Aires, Recoleta (CABA)</Text>
+                      <Text style={styles.deliveryNote}>SIN CARGO ADICIONAL</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.deliveryCard, selectedDelivery === 'envio' && styles.deliveryCardSelected]}
+                      activeOpacity={0.85}
+                      onPress={() => handleSelectDelivery('envio')}
+                    >
+                      <Text style={styles.deliveryTitle}>Envío Asegurado</Text>
+                      <Text style={styles.deliverySubtitle}>Logística especializada de lujo</Text>
+                      <Text style={styles.deliveryNote}>A COTIZAR POST-PAGO</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {ganados.length > 1 && (
+                    <View style={styles.otrosGanadosSection}>
+                      <Text style={styles.sectionTitleModal}>OTROS LOTES GANADOS</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.otrosGanadosScroll}>
+                        {ganados.filter((n) => n.id !== selectedGanado?.id).map((n) => (
+                          <TouchableOpacity
+                            key={n.id}
+                            style={styles.otherCard}
+                            onPress={() => handleSelectGanado(n)}
+                          >
+                            {n.imagen ? (
+                              <Image source={{ uri: n.imagen }} style={styles.otherImage} resizeMode="cover" />
+                            ) : (
+                              <View style={styles.otherPlaceholder} />
+                            )}
+                            <Text style={styles.otherTitle} numberOfLines={2}>{n.titulo}</Text>
+                            <Text style={styles.otherLote}>{n.lote}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
+                  <TouchableOpacity style={styles.confirmButton} activeOpacity={0.85} onPress={handleConfirmPago}>
+                    <Text style={styles.confirmButtonText}>CONFIRMAR Y PROCEDER AL PAGO</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -443,5 +606,260 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#000',
     letterSpacing: 1.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    height: '92%',
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderColor: '#F1F1F1',
+    backgroundColor: '#FFF',
+  },
+  modalStatus: {
+    color: '#111',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  modalSubtitle: {
+    color: '#555',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  modalCloseButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  productoCard: {
+    marginTop: 20,
+    borderRadius: 18,
+    backgroundColor: '#F8F8F8',
+    padding: 16,
+    gap: 12,
+  },
+  productoImagen: {
+    width: '100%',
+    height: 220,
+    borderRadius: 18,
+    backgroundColor: '#EAEAEA',
+  },
+  productoImagenPlaceholder: {
+    width: '100%',
+    height: 220,
+    borderRadius: 18,
+    backgroundColor: '#EAEAEA',
+  },
+  productoTitulo: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#111',
+  },
+  productoDescripcion: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 19,
+  },
+  resumenCard: {
+    marginTop: 22,
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  resumenLabel: {
+    color: '#999',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  resumenRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  resumenTexto: {
+    color: '#555',
+    fontSize: 13,
+    flex: 1,
+  },
+  resumenValor: {
+    color: '#111',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  resumenDivider: {
+    height: 1,
+    backgroundColor: '#EFEFEF',
+    marginVertical: 12,
+  },
+  totalTexto: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  sectionTitleModal: {
+    marginTop: 26,
+    marginBottom: 12,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#999',
+    letterSpacing: 2,
+  },
+  deliveryOptions: {
+    gap: 12,
+  },
+  deliveryCard: {
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: '#FFF',
+  },
+  deliveryCardSelected: {
+    borderColor: '#000',
+    backgroundColor: '#F7F7F7',
+  },
+  deliveryTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#111',
+    marginBottom: 4,
+  },
+  deliverySubtitle: {
+    fontSize: 12,
+    color: '#666',
+  },
+  deliveryNote: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#999',
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  otrosGanadosSection: {
+    marginTop: 26,
+  },
+  otrosGanadosScroll: {
+    paddingBottom: 8,
+  },
+  otherCard: {
+    width: 140,
+    marginRight: 14,
+    borderRadius: 16,
+    backgroundColor: '#FAFAFA',
+    padding: 12,
+  },
+  otherImage: {
+    width: '100%',
+    height: 96,
+    borderRadius: 14,
+    backgroundColor: '#EAEAEA',
+    marginBottom: 10,
+  },
+  otherPlaceholder: {
+    width: '100%',
+    height: 96,
+    borderRadius: 14,
+    backgroundColor: '#EAEAEA',
+    marginBottom: 10,
+  },
+  otherTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#111',
+    marginBottom: 6,
+  },
+  otherLote: {
+    fontSize: 11,
+    color: '#777',
+  },
+  confirmButton: {
+    marginTop: 28,
+    backgroundColor: '#000',
+    borderRadius: 24,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  successContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 40,
+    paddingBottom: 24,
+    gap: 18,
+  },
+  successIconContainer: {
+    width: 98,
+    height: 98,
+    borderRadius: 54,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#111',
+    textAlign: 'center',
+  },
+  successSubtitle: {
+    fontSize: 14,
+    color: '#4B5563',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 24,
+  },
+  successCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    marginTop: 8,
+  },
+  successCardText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#374151',
+    lineHeight: 18,
+  },
+  successReference: {
+    marginTop: 12,
+    color: '#6B7280',
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
 });
