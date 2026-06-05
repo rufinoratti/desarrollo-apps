@@ -9,13 +9,17 @@ export interface UseCountdownResult {
 }
 
 const formatearTiempo = (segundos: number): string => {
-  if (segundos <= 0) return '00h 00m';
+  if (segundos <= 0) return '00h 00m 00s';
   const d = Math.floor(segundos / 86400);
   const h = Math.floor((segundos % 86400) / 3600);
   const m = Math.floor((segundos % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  const s = segundos % 60;
+  const hh = String(h).padStart(2, '0');
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  if (d > 0) return `${d}d ${hh}h ${mm}m ${ss}s`;
+  if (h > 0 || m > 0) return `${hh}h ${mm}m ${ss}s`;
+  return `${ss}s`;
 };
 
 export function useCountdown(

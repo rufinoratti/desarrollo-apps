@@ -1,6 +1,10 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
 const { store } = require('./data.store');
+const {
+    calcularEstadoSubastaDisplay,
+    calcularFechasIso
+} = require('../utils/estadoSubasta');
 
 const normalizeText = (v = '') => String(v).toLowerCase().trim();
 
@@ -22,11 +26,7 @@ const sortArticulos = (articulos = [], orden = 'lote_numero') => {
     return list.sort((a, b) => String(a.numero_lote || '').localeCompare(String(b.numero_lote || '')));
 };
 
-const estadoSubastaDbToApi = (estado) => {
-    if (estado === 'abierta') return 'EN_VIVO';
-    if (estado === 'cerrada') return 'FINALIZADA';
-    return String(estado || '').toUpperCase() || 'DESCONOCIDO';
-};
+const estadoSubastaDbToApi = (row) => calcularEstadoSubastaDisplay(row);
 
 const parseItemIdForDb = (itemId) => {
     const numeric = Number(itemId);
@@ -114,7 +114,7 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
             subasta_info: {
                 id: String(subasta.identificador),
                 titulo: catalogo?.descripcion || `Subasta #${subasta.identificador}`,
-                estado: estadoSubastaDbToApi(subasta.estado),
+                estado: estadoSubastaDbToApi(subasta),
                 nivel_acceso: subasta.categoria || null,
                 imagen_portada: subasta.imagen || null
             },
@@ -191,19 +191,19 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
     articulos = sortArticulos(articulos, orden);
 
     const fechaInicioSub = subasta.fecha && subasta.hora ? `${subasta.fecha}T${subasta.hora}` : null;
-    const fechaFinSub = fechaInicioSub
-        ? new Date(new Date(fechaInicioSub).getTime() + 3600 * 1000).toISOString()
-        : null;
+    const { fecha_inicio_iso, fecha_fin_iso } = calcularFechasIso(subasta);
 
     return {
         subasta_info: {
             id: String(subasta.identificador),
             titulo: catalogo.descripcion || `Subasta #${subasta.identificador}`,
-            estado: estadoSubastaDbToApi(subasta.estado),
+            estado: estadoSubastaDbToApi(subasta),
             nivel_acceso: subasta.categoria || null,
             imagen_portada: subasta.imagen || null,
             fecha_inicio: fechaInicioSub,
-            fecha_fin: fechaFinSub
+            fecha_fin: fecha_fin_iso,
+            fecha_inicio_iso,
+            fecha_fin_iso
         },
         articulos: articulos.map(({ tiempo_referencia, ...articulo }) => articulo),
         total_articulos: articulos.length
@@ -347,14 +347,14 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         let subasta, subastaError;
         ({ data: subasta, error: subastaError } = await supabase
             .from('subastas')
-            .select('identificador, estado, fecha_cierre')
+            .select('identificador, estado, fecha_cierre, fecha, hora')
             .eq('identificador', catalogo.subasta)
             .maybeSingle());
 
         if (subastaError && /column .*fecha_cierre/i.test(subastaError.message || '')) {
             ({ data: subasta } = await supabase
                 .from('subastas')
-                .select('identificador, estado')
+                .select('identificador, estado, fecha, hora')
                 .eq('identificador', catalogo.subasta)
                 .maybeSingle());
         } else if (subastaError) {
@@ -362,10 +362,13 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         }
 
         if (subasta) {
+            const { fecha_inicio_iso, fecha_fin_iso } = calcularFechasIso(subasta);
             subastaInfo = {
                 id: String(subasta.identificador),
-                estado: subasta.estado,
-                fecha_cierre: (subasta).fecha_cierre || null
+                estado: estadoSubastaDbToApi(subasta),
+                fecha_cierre: (subasta).fecha_cierre || null,
+                fecha_inicio_iso,
+                fecha_fin_iso
             };
 
             if ((subasta).fecha_cierre) {

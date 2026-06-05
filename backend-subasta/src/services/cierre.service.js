@@ -16,6 +16,15 @@ const ejecutarUpdate = async (table, values, column, id) => {
     return true;
 };
 
+const CHUNK_SIZE = 10;
+
+const ejecutarEnChunks = async (tareas, chunkSize = CHUNK_SIZE) => {
+    for (let i = 0; i < tareas.length; i += chunkSize) {
+        const bloque = tareas.slice(i, i + chunkSize);
+        await Promise.all(bloque.map((t) => ejecutarUpdate(t.table, t.values, t.column, t.id)));
+    }
+};
+
 const cerrarSubasta = async (subastaId) => {
     await ejecutarUpdate('subastas', { estado: 'cerrada' }, 'identificador', subastaId);
 
@@ -34,28 +43,87 @@ const cerrarSubasta = async (subastaId) => {
         .in('catalogo', catalogoIds);
     if (errItems) throw new AppError('Error al obtener items: ' + errItems.message, 500);
 
-    for (const item of items || []) {
-        const { data: maxBid, error: errBid } = await supabase
-            .from('pujos')
-            .select('identificador, importe')
-            .eq('item', item.identificador)
-            .order('importe', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+    const itemIds = (items || []).map((i) => i.identificador);
+    if (!itemIds.length) return;
 
-        if (errBid) throw new AppError('Error al obtener puja máxima: ' + errBid.message, 500);
+    const { data: pujas, error: errPujas } = await supabase
+        .from('pujos')
+        .select('identificador, importe, item')
+        .in('item', itemIds);
+    if (errPujas) throw new AppError('Error al obtener pujas: ' + errPujas.message, 500);
 
-        if (maxBid) {
-            await ejecutarUpdate('pujos', { ganador: 'si' }, 'identificador', maxBid.identificador);
-            await ejecutarUpdate('itemscatalogo', { subastado: 'si' }, 'identificador', item.identificador);
-        } else {
-            await ejecutarUpdate('itemscatalogo', { subastado: 'no' }, 'identificador', item.identificador);
+    const maxBidPorItem = new Map();
+    for (const puja of pujas || []) {
+        const actual = maxBidPorItem.get(puja.item);
+        if (!actual || puja.importe > actual.importe) {
+            maxBidPorItem.set(puja.item, puja);
         }
     }
+
+    const updatesPujas = [];
+    const updatesItemsSi = [];
+    const updatesItemsNo = [];
+
+    for (const itemId of itemIds) {
+        const ganador = maxBidPorItem.get(itemId);
+        if (ganador) {
+            updatesPujas.push({
+                table: 'pujos',
+                values: { ganador: 'si' },
+                column: 'identificador',
+                id: ganador.identificador
+            });
+            updatesItemsSi.push({
+                table: 'itemscatalogo',
+                values: { subastado: 'si' },
+                column: 'identificador',
+                id: itemId
+            });
+        } else {
+            updatesItemsNo.push({
+                table: 'itemscatalogo',
+                values: { subastado: 'no' },
+                column: 'identificador',
+                id: itemId
+            });
+        }
+    }
+
+    await Promise.all([
+        ejecutarEnChunks(updatesPujas),
+        ejecutarEnChunks(updatesItemsSi),
+        ejecutarEnChunks(updatesItemsNo)
+    ]);
 };
 
 const ejecutarCierre = async () => {
     const ahora = new Date();
+
+    const { data: porAbrir, error: errPorAbrir } = await supabase
+        .from('subastas')
+        .select('identificador, fecha, hora')
+        .eq('estado', 'cerrada');
+    if (errPorAbrir) throw new AppError('Error al obtener subastas por abrir: ' + errPorAbrir.message, 500);
+
+    let abiertas = 0;
+    const erroresAbrir = [];
+    for (const subasta of porAbrir || []) {
+        if (!subasta.fecha || !subasta.hora) continue;
+        const fechaInicio = new Date(`${subasta.fecha}T${subasta.hora}`);
+        if (Number.isNaN(fechaInicio.getTime())) continue;
+        const fechaFin = calcularFechaFin(fechaInicio);
+        if (fechaInicio.getTime() > ahora.getTime()) continue;
+        if (fechaFin.getTime() <= ahora.getTime()) continue;
+
+        try {
+            await ejecutarUpdate('subastas', { estado: 'abierta' }, 'identificador', subasta.identificador);
+            abiertas++;
+        } catch (err) {
+            console.error(`Error al abrir subasta ${subasta.identificador}: ${err.message}`);
+            erroresAbrir.push({ subasta: subasta.identificador, error: err.message });
+        }
+    }
+
     const { data: subastas, error: errSubastas } = await supabase
         .from('subastas')
         .select('identificador, fecha, hora')
@@ -80,11 +148,14 @@ const ejecutarCierre = async () => {
         }
     }
 
+    if (erroresAbrir.length) {
+        console.error(`[CRON] ${erroresAbrir.length} subasta(s) con errores al abrir:`, erroresAbrir);
+    }
     if (errores.length) {
-        console.error(`[CRON] ${errores.length} subasta(s) con errores:`, errores);
+        console.error(`[CRON] ${errores.length} subasta(s) con errores al cerrar:`, errores);
     }
 
-    return { cerradas, errores };
+    return { abiertas, cerradas, errores: [...erroresAbrir, ...errores] };
 };
 
 const ejecutarCierreSubasta = async (subastaId) => {

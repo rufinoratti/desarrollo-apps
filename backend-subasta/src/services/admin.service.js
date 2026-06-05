@@ -360,7 +360,7 @@ const crearSubasta = async ({ payload }) => {
                 seguridadpropia: seguridad || null,
                 categoria: String(categoria).trim(),
                 tematica,
-                estado: 'abierta',
+                estado: fechaHora.getTime() > Date.now() ? 'cerrada' : 'abierta',
                 imagen: imagen || null
             })
             .select('identificador, nombre, fecha, hora, ubicacion, categoria, tematica, estado, imagen')

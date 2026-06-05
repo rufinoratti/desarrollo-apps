@@ -261,6 +261,13 @@ const realizarPujaLocal = async ({ authUser, payload }) => {
 
     const { subasta, item } = getLocalItemContext(item_id);
 
+    if (subasta.fecha_inicio) {
+        const inicio = new Date(subasta.fecha_inicio);
+        if (!Number.isNaN(inicio.getTime()) && inicio.getTime() > Date.now()) {
+            throw new AppError('La subasta aún no comenzó', 400);
+        }
+    }
+
     const estadoLocal = String(subasta.estado || '').toUpperCase();
     if (!['EN_VIVO', 'ABIERTA'].includes(estadoLocal)) {
         throw new AppError('Artículo no encontrado o subasta cerrada', 404);
@@ -461,6 +468,13 @@ const realizarPujaSupabase = async ({ authUser, payload }) => {
 
     const clienteId = await resolveClienteIdSupabase(authUser);
     const { item, subasta } = await obtenerContextoItemSupabase(itemIdNum);
+
+    if (subasta.fecha && subasta.hora) {
+        const inicio = new Date(`${subasta.fecha}T${subasta.hora}`);
+        if (!Number.isNaN(inicio.getTime()) && inicio.getTime() > Date.now()) {
+            throw new AppError('La subasta aún no comenzó', 400);
+        }
+    }
 
     const estadoSupa = String(subasta.estado || '').toUpperCase();
     if (!['ABIERTA', 'EN_VIVO'].includes(estadoSupa)) {
