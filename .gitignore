@@ -2,8 +2,12 @@
 .DS_Store
 .env
 .env.*
+.env.*.local
 .vscode/
 .idea/
 
-# Carpetas de dependencias globales 
+# Carpetas de dependencias globales
 node_modules/
+
+# Coverage de tests (si corres jest desde la raiz)
+coverage/
