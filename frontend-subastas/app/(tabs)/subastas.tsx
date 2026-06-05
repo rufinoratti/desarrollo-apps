@@ -234,7 +234,7 @@ export default function SubastasScreen() {
           toValue: 0, duration: 450, delay: Math.min(index * 70, 350), useNativeDriver: true,
         }),
       ]).start();
-    }, []);
+    }, );
 
     const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
     const nivelRequerido = rankOf(rawReq);

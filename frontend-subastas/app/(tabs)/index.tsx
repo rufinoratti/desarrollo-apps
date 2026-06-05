@@ -109,7 +109,7 @@ function SubastaCard({ item, index }: { item: Subasta; index: number }) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  });
 
   const rankOf = (lvl?: string | number) => {
     if (!lvl && lvl !== 0) return 1;
@@ -188,7 +188,7 @@ function SubastaCard({ item, index }: { item: Subasta; index: number }) {
 }
 
 export default function Home() {
-  const { nombre, token, removeToken, isLoading, nivel } = useAuth();
+  const { nombre, token, removeToken, isLoading } = useAuth();
   
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [subastas, setSubastas] = useState<Subasta[]>([]);
