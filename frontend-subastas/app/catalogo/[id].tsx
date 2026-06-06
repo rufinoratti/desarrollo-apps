@@ -409,11 +409,6 @@ export default function CatalogoScreen() {
         style={styles.imageContainer}
       >
         <Image source={{ uri: item.imagen_principal }} style={styles.cardImagen} resizeMode="contain" />
-        {item.estado === 'DISPONIBLE' && (
-          <View style={styles.badgeEnVivo}>
-            <Text style={styles.badgeEnVivoTexto}>EN VIVO</Text>
-          </View>
-        )}
         <CountdownBadge
           fechaInicio={subastaInfo?.fecha_inicio}
           fechaFin={subastaInfo?.fecha_fin}
@@ -728,8 +723,6 @@ const styles = StyleSheet.create({
   card: { width: '100%', backgroundColor: '#F8F9FA' },
   imageContainer: { width: '100%', height: 220, backgroundColor: '#EAEAEA', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   cardImagen: { width: '100%', height: '100%' },
-  badgeEnVivo: { position: 'absolute', top: 12, left: 12, backgroundColor: '#000', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 2 },
-  badgeEnVivoTexto: { color: '#fff', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
   cardBody: { paddingHorizontal: 4 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   cardTitleContainer: { flex: 1, paddingRight: 16 },
