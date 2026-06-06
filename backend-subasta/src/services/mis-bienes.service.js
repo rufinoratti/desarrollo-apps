@@ -328,7 +328,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const revisorId = parseNumber(payload?.revisor);
     const precioSugerido = parseNumber(payload?.preciosugerido);
 
-    // Datos del seguro
     const seguroNroPoliza = String(payload?.seguro_nropoliza || '').trim();
     const seguroCompania = String(payload?.seguro_compania || '').trim();
     const seguroImporte = parseNumber(payload?.seguro_importe);
@@ -360,12 +359,19 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         throw err;
     }
 
+    console.log(`[mis-bienes.crearProducto] inicio seguro=${seguroNroPoliza} duenio=${clienteId} revisor=${revisorId}`);
+
     // 1. Verificar que el nropoliza no esté ya usado
-    const { data: polizaExistente } = await supabase
+    const { data: polizaExistente, error: polizaExistenteError } = await supabase
         .from('seguros')
         .select('nropoliza')
         .eq('nropoliza', seguroNroPoliza)
         .maybeSingle();
+
+    if (polizaExistenteError) {
+        console.error('[mis-bienes.crearProducto] Error consultando seguro existente:', polizaExistenteError);
+        throw new AppError('Error al validar póliza existente: ' + polizaExistenteError.message, 500);
+    }
 
     if (polizaExistente) {
         const err = new AppError('El número de póliza ya existe', 400);
@@ -374,18 +380,30 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     }
 
     // 2. Crear el seguro primero
-    const { error: seguroError } = await supabase
+    // Usamos .select().single() para que Supabase nos devuelva la fila insertada;
+    // si la policy RLS rechaza en silencio, data será null y lo detectamos acá.
+    const { data: seguroCreado, error: seguroError } = await supabase
         .from('seguros')
         .insert({
             nropoliza: seguroNroPoliza,
             compania: seguroCompania,
             importe: seguroImporte,
             polizacombinada: seguroPolizaCombinada
-        });
+        })
+        .select('nropoliza')
+        .single();
 
     if (seguroError) {
+        console.error('[mis-bienes.crearProducto] Error insertando seguro:', seguroError);
         throw new AppError('Error al registrar seguro: ' + seguroError.message, 500);
     }
+
+    if (!seguroCreado?.nropoliza) {
+        console.error('[mis-bienes.crearProducto] RLS rechazó INSERT de seguro sin devolver error explícito');
+        throw new AppError('No se pudo registrar el seguro (verificar policies RLS de la tabla seguros)', 500);
+    }
+
+    console.log(`[mis-bienes.crearProducto] seguro creado nropoliza=${seguroCreado.nropoliza}`);
 
     // 3. Crear el producto linkeado al seguro
     const { data: producto, error: productoError } = await supabase
@@ -400,16 +418,27 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             duenio: clienteId,
             seguro: seguroNroPoliza
         })
-        .select('identificador')
+        .select('identificador, seguro')
         .single();
 
     if (productoError) {
-        // Si falla el producto, borramos el seguro para no dejar datos huérfanos
-        await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);
+        console.error('[mis-bienes.crearProducto] Error insertando producto, haciendo rollback del seguro:', productoError);
+        const { error: rollbackError } = await supabase
+            .from('seguros')
+            .delete()
+            .eq('nropoliza', seguroNroPoliza);
+        if (rollbackError) {
+            console.error('[mis-bienes.crearProducto] Error en rollback del seguro:', rollbackError);
+        }
         throw new AppError('Error al crear producto: ' + productoError.message, 500);
     }
 
+    if (!producto?.seguro) {
+        console.error(`[mis-bienes.crearProducto] ALERTA: producto ${producto?.identificador} creado pero sin seguro linkeado. Esperado: ${seguroNroPoliza}, recibido: ${producto?.seguro}`);
+    }
+
     const productoId = producto?.identificador;
+    console.log(`[mis-bienes.crearProducto] producto creado id=${productoId} seguro=${producto?.seguro}`);
 
     // 4. Subir las fotos
     try {
@@ -426,7 +455,7 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             throw new AppError('Error al guardar fotos: ' + fotosError.message, 500);
         }
     } catch (error) {
-        // Rollback completo si fallan las fotos
+        console.error('[mis-bienes.crearProducto] Error guardando fotos, haciendo rollback completo:', error);
         await supabase.from('fotos').delete().eq('producto', productoId);
         await supabase.from('productos').delete().eq('identificador', productoId);
         await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);
