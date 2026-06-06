@@ -58,7 +58,7 @@ const obtenerSubastas = async ({ tematica, estado, limite = 20, pagina = 1 } = {
             estadoDB = 'cerrada';
             estadoDisplayFiltro = PROXIMAMENTE;
         } else if (estadoUpper === FINALIZADA) {
-            estadoDB = 'cerrada';
+            estadoDB = 'finalizada';
             estadoDisplayFiltro = FINALIZADA;
         }
     }

@@ -14,7 +14,7 @@ test('obtenerEstadoPujasItem devuelve oferta actual e historial', async () => {
     assert.equal(result.item_id, 'i101');
     assert.ok(typeof result.oferta_actual === 'number');
     assert.ok(Array.isArray(result.historial_pujas));
-    assert.ok(['ABIERTA', 'CERRADA'].includes(result.estado_subasta));
+    assert.ok(['ABIERTA', 'CERRADA', 'FINALIZADA'].includes(result.estado_subasta));
 });
 
 test('realizarPuja registra puja válida', async () => {

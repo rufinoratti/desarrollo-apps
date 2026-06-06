@@ -26,7 +26,7 @@ const ejecutarEnChunks = async (tareas, chunkSize = CHUNK_SIZE) => {
 };
 
 const cerrarSubasta = async (subastaId) => {
-    await ejecutarUpdate('subastas', { estado: 'cerrada' }, 'identificador', subastaId);
+    await ejecutarUpdate('subastas', { estado: 'finalizada' }, 'identificador', subastaId);
 
     const { data: catalogos, error: errCatalogos } = await supabase
         .from('catalogos')
@@ -176,7 +176,12 @@ const ejecutarCierreSubasta = async (subastaId) => {
 
     if (err) throw new AppError('Error al obtener subasta: ' + err.message, 500);
     if (!subasta) throw new AppError('Subasta no encontrada', 404);
-    if (subasta.estado === 'cerrada') throw new AppError('La subasta ya está cerrada', 400);
+    if (subasta.estado === 'cerrada') {
+        throw new AppError('La subasta aún no comenzó, no se puede cerrar', 400);
+    }
+    if (subasta.estado === 'finalizada') {
+        throw new AppError('La subasta ya está finalizada', 400);
+    }
 
     await cerrarSubasta(subasta.identificador);
     return { mensaje: 'Subasta cerrada correctamente' };
