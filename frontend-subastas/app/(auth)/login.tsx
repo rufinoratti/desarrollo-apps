@@ -119,7 +119,7 @@ export default function Login() {
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
-            onForgot={() => router.push('/(auth)/recuperar-clave')}
+            onForgot={() => router.push('/recuperar-clave')}
           />
 
           <View style={styles.spacer} />
@@ -132,7 +132,7 @@ export default function Login() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿No tiene una cuenta? </Text>
-            <TouchableOpacity onPress={() => router.replace('/(auth)/registro/paso1')}>
+            <TouchableOpacity onPress={() => router.replace('/registro/paso1')}>
               <Text style={styles.footerLink}>Crear Cuenta</Text>
             </TouchableOpacity>
           </View>

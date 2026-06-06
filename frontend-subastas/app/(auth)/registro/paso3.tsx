@@ -132,7 +132,7 @@ export default function Paso3() {
         Alert.alert('Error', 'Las imágenes son muy pesadas. Intenta tomar una foto con menor resolución.');
       } else if (response.status === 200) {
         Alert.alert('Éxito', data.mensaje);
-        router.push('/(auth)/registro/paso4-pago');
+        router.push('/registro/paso4-pago');
       } else {
         Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }

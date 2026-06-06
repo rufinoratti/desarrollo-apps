@@ -109,7 +109,7 @@ useEffect(() => {
             email: formData.email,
           }
         });
-        router.push('/(auth)/registro/paso2');
+        router.push('/registro/paso2');
       } else {
         Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }
@@ -205,7 +205,7 @@ useEffect(() => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Ya tiene una cuenta? </Text>
-            <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+            <TouchableOpacity onPress={() => router.replace('/login')}>
               <Text style={styles.footerLink}>Iniciar Sesión</Text>
             </TouchableOpacity>
           </View>

@@ -353,7 +353,7 @@ export default function Perfil() {
         style: 'destructive',
         onPress: async () => {
           await removeToken();
-          router.replace('/(auth)/login');
+          router.replace('/login');
         },
       },
     ]);
@@ -655,7 +655,7 @@ export default function Perfil() {
           </TouchableOpacity>
 
         {/* Cambiar Contraseña */}
-        <TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/(auth)/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
+<TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
           <Ionicons name="lock-closed-outline" size={20} color="#000" />
           <Text style={styles.cambiarClaveText}>CAMBIAR CONTRASEÑA</Text>
         </TouchableOpacity>

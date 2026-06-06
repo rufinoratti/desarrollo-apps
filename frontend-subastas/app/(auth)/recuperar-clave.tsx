@@ -71,7 +71,7 @@ export default function RecuperarClave() {
                 </Text>
                 <Button
                   title="Restablecer Contraseña"
-                  onPress={() => router.push(`/(auth)/restablecer-clave?email=${encodeURIComponent(email)}&token=${resetToken}`)}
+                  onPress={() => router.push(`/restablecer-clave?email=${encodeURIComponent(email)}&token=${resetToken}`)}
                   style={styles.devButton}
                 />
               </View>
@@ -79,7 +79,7 @@ export default function RecuperarClave() {
             <View style={styles.spacer} />
             <Button
               title="Volver al Inicio de Sesión"
-              onPress={() => router.replace('/(auth)/login')}
+              onPress={() => router.replace('/login')}
             />
           </ScrollView>
         </KeyboardAvoidingView>
@@ -130,7 +130,7 @@ export default function RecuperarClave() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Recordaste tu contraseña? </Text>
-            <Text style={styles.footerLink} onPress={() => router.replace('/(auth)/login')}>
+            <Text style={styles.footerLink} onPress={() => router.replace('/login')}>
               Iniciar Sesión
             </Text>
           </View>

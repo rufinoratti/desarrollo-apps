@@ -9,20 +9,20 @@ Dimensions.get('window');
 const ONBOARDING_DATA = [
   {
     id: 1,
-    title: 'Descubri subastas\nen tiempo real',
-    subtitle: 'Encontrá productos únicos\ny pujás en segundos',
+    title: 'Descubrí subastas en tiempo real',
+    subtitle: 'Encontrá productos únicos y pujas en segundos',
     image: 'https://upload.wikimedia.org/wikipedia/commons/8/84/Tel%C3%A9fono_Antiguo.jpg', // Teléfono antiguo
   },
   {
     id: 2,
     title: 'Pujar es fácil',
-    subtitle: 'Elegí un producto, hacé tu\noferta y seguí la subasta en\nvivo',
+    subtitle: 'Elegí un producto, hacé tu oferta y seguí la subasta en vivo',
     image: 'https://m.media-amazon.com/images/I/61sKw8b3S9L._AC_UF894,1000_QL80_.jpg', // Arte/Mona Lisa simulación
   },
   {
     id: 3,
-    title: 'Empeza a pujar\nahora',
-    subtitle: 'Creá tu cuenta y participá en\nminutos',
+    title: 'Empeza a pujar ahora',
+    subtitle: 'Creá tu cuenta y participá en minutos',
     image: 'https://png.pngtree.com/png-clipart/20250609/original/pngtree-classic-vintage-camera-png-image_21143451.png', // Cámara vintage
   }
 ];
@@ -50,11 +50,11 @@ export default function Onboarding() {
   };
 
   const handleCreateAccount = () => {
-    router.replace('/(auth)/registro/paso1');
+    router.replace('/registro/paso1');
   };
 
   const handleLogin = () => {
-    router.replace('/(auth)/login'); 
+    router.replace('/login');
   };
 
   const currentSlide = ONBOARDING_DATA[currentIndex];
@@ -152,14 +152,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: 35,
     fontWeight: 'bold',
     color: '#000',
     marginBottom: 15,
     lineHeight: 34,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#888',
     lineHeight: 24,
   },

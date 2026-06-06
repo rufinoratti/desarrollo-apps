@@ -192,7 +192,7 @@ export default function Billetera() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('/(auth)/registro/paso4-pago?addOnly=true')}
+          onPress={() => router.push('/registro/paso4-pago?addOnly=true')}
         >
           <Text style={styles.addButtonText}>AGREGAR MEDIO DE PAGO +</Text>
         </TouchableOpacity>
