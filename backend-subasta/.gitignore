@@ -1,2 +1,13 @@
-.env
-        
+
+# Logs
+*.log
+npm-debug.*
+
+# Tests coverage (jest --coverage)
+coverage/
+
+# === NOTA PARA HOSPEDAJE (Render/Railway/Fly.io) ===
+# El filesystem es efímero. Cuando migres uploads a Supabase Storage o S3,
+# ignorá esta carpeta y remové del tracking con:
+#   git rm -r --cached backend-subasta/uploads
+# uploads/

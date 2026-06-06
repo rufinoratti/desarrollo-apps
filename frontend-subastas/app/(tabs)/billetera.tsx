@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { SkeletonList } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 type MedioPago = {
@@ -133,8 +134,19 @@ export default function Billetera() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#000" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.logo}>REMATIX</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <Text style={styles.subtitle}>GESTIÓN DE FONDOS</Text>
+        <Text style={styles.title}>Administrar Medios de Pago</Text>
+
+        <View style={styles.list}>
+          <SkeletonList rows={4} gap={12} />
         </View>
       </SafeAreaView>
     );
@@ -180,7 +192,7 @@ export default function Billetera() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => router.push('/(auth)/registro/paso4-pago?addOnly=true')}
+          onPress={() => router.push('/registro/paso4-pago?addOnly=true')}
         >
           <Text style={styles.addButtonText}>AGREGAR MEDIO DE PAGO +</Text>
         </TouchableOpacity>
@@ -201,9 +213,9 @@ const styles = StyleSheet.create({
     paddingBottom: 5,
   },
   backButton: { padding: 5 },
-  logo: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  logo: { fontSize: 23, fontWeight: '900', letterSpacing: 1 },
   subtitle: {
-    fontSize: 10,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,
@@ -212,7 +224,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   title: {
-    fontSize: 22,
+    fontSize: 25,
     fontWeight: 'bold',
     marginBottom: 25,
     paddingHorizontal: 20,
@@ -237,12 +249,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardCenter: { flex: 1 },
-  cardDescription: { fontSize: 13, fontWeight: '600', color: '#222' },
+  cardDescription: { fontSize: 17, fontWeight: '600', color: '#222' },
   cardRight: { alignItems: 'flex-end', gap: 8 },
   principalBadge: {
     backgroundColor: '#000',
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   principalText: { color: '#FFF', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
@@ -258,7 +270,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#FFF',
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
   },

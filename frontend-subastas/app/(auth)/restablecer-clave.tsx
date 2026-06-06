@@ -76,7 +76,7 @@ export default function RestablecerClave() {
             <View style={styles.spacer} />
             <Button
               title="INICIAR SESIÓN"
-              onPress={() => router.replace('/(auth)/login')}
+              onPress={() => router.replace('/login')}
             />
           </ScrollView>
         </View>
@@ -148,7 +148,7 @@ export default function RestablecerClave() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Recordaste tu contraseña? </Text>
-            <Text style={styles.footerLink} onPress={() => router.replace('/(auth)/login')}>
+            <Text style={styles.footerLink} onPress={() => router.replace('/login')}>
               Iniciar Sesión
             </Text>
           </View>

@@ -67,7 +67,7 @@ export default function Paso2() {
       if (response.status === 400) {
         Alert.alert('Error', data.error);
       } else if (response.status === 200) {
-        router.push('/(auth)/registro/paso3');
+        router.push('/registro/paso3');
       } else {
         Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }

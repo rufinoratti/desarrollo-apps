@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { Skeleton } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 type Estadisticas = {
@@ -45,9 +46,35 @@ export default function MetricasHistorial() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#000" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.logo}>REMATIX</Text>
+          <View style={{ width: 24 }} />
         </View>
+
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.subtitle}>MÉTRICAS E HISTORIAL</Text>
+          <Text style={styles.title}>Estadísticas del Usuario</Text>
+
+          <View style={styles.grid}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.statCard}>
+                <Skeleton width={44} height={44} borderRadius={22} style={{ marginBottom: 12 }} />
+                <Skeleton width="60%" height={22} style={{ marginBottom: 8 }} />
+                <Skeleton width="80%" height={10} />
+              </View>
+            ))}
+          </View>
+
+          <Text style={styles.sectionTitle}>HISTORIAL DE PUJAS</Text>
+          <View style={{ gap: 10 }}>
+            <Skeleton width="100%" height={70} borderRadius={12} />
+            <Skeleton width="100%" height={70} borderRadius={12} />
+            <Skeleton width="100%" height={70} borderRadius={12} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -113,14 +140,14 @@ const styles = StyleSheet.create({
   logo: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
   content: { padding: 20, paddingTop: 10 },
   subtitle: {
-    fontSize: 10,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,
     marginBottom: 5,
   },
   title: {
-    fontSize: 22,
+    fontSize: 27,
     fontWeight: 'bold',
     marginBottom: 25,
   },
@@ -132,7 +159,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '47%',
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#cdd3d5',
     borderRadius: 14,
     padding: 18,
     alignItems: 'center',
@@ -153,14 +180,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: '600',
     color: '#888',
     textAlign: 'center',
     letterSpacing: 1,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,

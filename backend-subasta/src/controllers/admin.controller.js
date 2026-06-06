@@ -1,4 +1,5 @@
 const adminService = require('../services/admin.service');
+const cierreService = require('../services/cierre.service');
 
 const evaluarCliente = async (req, res, next) => {
     try {
@@ -106,6 +107,16 @@ const crearCatalogo = async (req, res, next) => {
     }
 };
 
+const cerrarSubasta = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await cierreService.ejecutarCierreSubasta(id);
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 module.exports = {
     evaluarCliente,
     evaluarProducto,
@@ -117,5 +128,6 @@ module.exports = {
     obtenerOpciones,
     listarSubastas,
     listarCatalogosPorSubasta,
-    crearCatalogo
+    crearCatalogo,
+    cerrarSubasta
 };

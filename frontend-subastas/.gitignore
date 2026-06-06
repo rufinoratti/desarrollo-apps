@@ -1,57 +1,13 @@
-# dependencies
-node_modules/
-.pnpm-store/
-*.log
-
-# Expo
+# Expo & Metro
 .expo/
 dist/
 web-build/
 expo-env.d.ts
-
-# local env files - ¡ESTO LO CAMBIAMOS PARA PROTEGER TU IP!
-.env
-.env.local
-.env.*.local
-
-# local tooling
-.opencode/
-.commandcode/
-.agents/
-skills-lock.json
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
 .metro-health-check*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# mock server
-mock-server/uploads/
-
-# legacy uploads
-uploads/
-
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# generated native folders
+# Carpetas nativas generadas
 /ios
 /android
+
+# TypeScript
+*.tsbuildinfo

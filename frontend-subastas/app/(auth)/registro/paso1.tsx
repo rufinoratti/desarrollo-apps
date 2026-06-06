@@ -109,7 +109,7 @@ useEffect(() => {
             email: formData.email,
           }
         });
-        router.push('/(auth)/registro/paso2');
+        router.push('/registro/paso2');
       } else {
         Alert.alert('Error', data.error || 'Ocurrió un error inesperado');
       }
@@ -205,7 +205,7 @@ useEffect(() => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿Ya tiene una cuenta? </Text>
-            <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+            <TouchableOpacity onPress={() => router.replace('/login')}>
               <Text style={styles.footerLink}>Iniciar Sesión</Text>
             </TouchableOpacity>
           </View>
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   logo: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: '900',
     textAlign: 'center',
     marginBottom: 40,
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   progressText: {
-    fontSize: 10,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     width: '33%',
   },
   title: {
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: 'bold',
     marginBottom: 30,
   },
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEE',
   },
   dividerText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#888',
     marginHorizontal: 10,
     letterSpacing: 1,
@@ -281,11 +281,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#888',
   },
   footerLink: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
   }

@@ -1,17 +1,61 @@
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
+import CountdownBadge from '@/src/components/CountdownBadge';
+import { Skeleton, SkeletonList } from '@/src/components/Skeleton';
 
 interface Categoria {
   id: number;
   nombre: string;
 }
 
-const NIVELES: Record<string, number> = { BASE: 0, ORO: 1, PLATINO: 2 };
+// No hard-coded small map here — convert any known level string to a numeric rank for comparisons
+const rankOf = (lvl?: string | number) => {
+  if (!lvl && lvl !== 0) return 1;
+  const s = String(lvl)
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+  const digits = s.match(/\d+/);
+  if (digits?.[0]) {
+    const num = Number(digits[0]);
+    if (num >= 1 && num <= 5) return num;
+  }
+  if (s.includes('platino') || s.includes('platinum')) return 5;
+  if (s.includes('oro')) return 4;
+  if (s.includes('plata')) return 3;
+  if (s.includes('especial')) return 2;
+  if (s.includes('comun') || s.includes('base')) return 1;
+  switch (s) {
+    case 'base':
+    case 'comun':
+    case '1':
+      return 1;
+    case 'especial':
+    case '2':
+      return 2;
+    case 'plata':
+    case '3':
+      return 3;
+    case 'oro':
+    case '4':
+      return 4;
+    case 'platino':
+    case '5':
+      return 5;
+    case 'base'.toUpperCase():
+    case 'oro'.toUpperCase():
+    case 'platino'.toUpperCase():
+      return rankOf(s.toLowerCase());
+    default:
+      return 1;
+  }
+};
 
 interface SubastaItem {
   id?: string | number;
@@ -23,6 +67,68 @@ interface SubastaItem {
   estado: string;
   nivel_requerido: string;
   categoria_id: number;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+}
+
+function getDisplayStatus(item: SubastaItem): string {
+  const estadoLower = String(item.estado).toLowerCase();
+  if (estadoLower === 'cerrada' || estadoLower === 'finalizada') return 'FINALIZADA';
+  const now = Date.now();
+  const start = item.fecha_inicio ? new Date(item.fecha_inicio).getTime() : 0;
+  const end = item.fecha_fin ? new Date(item.fecha_fin).getTime() : 0;
+  if (start && now < start) return 'PRÓXIMAMENTE';
+  if (end && now >= end) return 'FINALIZADA';
+  return 'EN VIVO';
+}
+
+const STATUS_ORDER: Record<string, number> = { 'EN VIVO': 0, 'PRÓXIMAMENTE': 1, 'FINALIZADA': 2 };
+
+function sortSubastas(list: SubastaItem[]): SubastaItem[] {
+  return [...list].sort((a, b) => {
+    const orderA = STATUS_ORDER[getDisplayStatus(a)] ?? 2;
+    const orderB = STATUS_ORDER[getDisplayStatus(b)] ?? 2;
+    if (orderA !== orderB) return orderA - orderB;
+    const startA = a.fecha_inicio ? new Date(a.fecha_inicio).getTime() : 0;
+    const startB = b.fecha_inicio ? new Date(b.fecha_inicio).getTime() : 0;
+    return startA - startB;
+  });
+}
+
+const BADGE_COLORS: Record<string, string> = {
+  'EN VIVO': '#059669',
+  'PRÓXIMAMENTE': '#2563EB',
+  'FINALIZADA': '#6B7280',
+};
+
+function StatusBadge({ estado }: { estado: string }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (estado !== 'EN VIVO') return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [estado, pulseAnim]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: BADGE_COLORS[estado] || '#000',
+          opacity: estado === 'EN VIVO' ? pulseAnim : 1,
+        },
+      ]}
+    >
+      <Text style={styles.badgeTexto}>{estado}</Text>
+    </Animated.View>
+  );
 }
 
 export default function SubastasScreen() {
@@ -56,7 +162,7 @@ export default function SubastasScreen() {
   const fetchSubastas = async (pag: number, catId: number | null, append: boolean) => {
     if (pag === 1) setCargando(true); else setCargandoMas(true);
     try {
-      let url = `${API_URL}/api/subastas?pagina=${pag}&limite=10`;
+      let url = `${API_URL}/api/subastas?pagina=${pag}&limite=100`;
       if (catId) url += `&tematica=${catId}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -65,7 +171,7 @@ export default function SubastasScreen() {
       if (!res.ok) return;
       const data = await res.json();
       setTotalPaginas(data.total_paginas);
-      setSubastas(prev => append ? [...prev, ...data.subastas] : data.subastas);
+      setSubastas(prev => append ? sortSubastas([...prev, ...data.subastas]) : sortSubastas(data.subastas));
     } catch {
       // Silencioso
     } finally {
@@ -112,15 +218,30 @@ export default function SubastasScreen() {
     }
   };
 
-  const nivelActual = NIVELES[nivel || 'BASE'] || 0;
+  const nivelActual = rankOf(nivel || 'base');
 
-  const renderSubastaCard = ({ item }: { item: SubastaItem }) => {
-    const nivelRequerido = NIVELES[item.nivel_requerido] || 0;
-    const bloqueada = nivelActual < nivelRequerido;
-    const esEnVivo = item.estado === 'EN_VIVO';
+  function SubastaCard({ item, index }: { item: SubastaItem; index: number }) {
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(24)).current;
+    const estado = getDisplayStatus(item);
+
+    useEffect(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1, duration: 450, delay: Math.min(index * 70, 350), useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0, duration: 450, delay: Math.min(index * 70, 350), useNativeDriver: true,
+        }),
+      ]).start();
+    }, );
+
+    const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
+    const nivelRequerido = rankOf(rawReq);
+    const bloqueada = nivelActual < nivelRequerido && estado === 'EN VIVO';
 
     return (
-      <View style={styles.card}>
+      <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
@@ -133,22 +254,24 @@ export default function SubastasScreen() {
           }}
           style={styles.imagenContainer}
         >
-          {bloqueada ? (
-            <View style={styles.imagenBloqueada}>
+          <Image
+            source={{ uri: item.imagen_portada }}
+            style={styles.imagen}
+            resizeMode="cover"
+            blurRadius={bloqueada ? 6 : 0}
+          />
+          {bloqueada && (
+            <View style={styles.overlayBloqueada}>
               <Ionicons name="lock-closed" size={32} color="#fff" />
-              <Text style={styles.textoAcceso}>ACCESO {item.nivel_requerido} REQUERIDO</Text>
+              <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
             </View>
-          ) : (
-            <Image source={{ uri: item.imagen_portada }} style={styles.imagen} resizeMode="cover" />
           )}
-          {esEnVivo ? (
-            <View style={styles.badgeVivo}>
-              <Text style={styles.badgeVivoTexto}>EN VIVO</Text>
-            </View>
-          ) : (
-            <View style={styles.badgeProximamente}>
-              <Text style={styles.badgeProximamenteTexto}>PRÓXIMAMENTE</Text>
-            </View>
+          {!bloqueada && <StatusBadge estado={estado} />}
+          {!bloqueada && (estado === 'EN VIVO' || estado === 'PRÓXIMAMENTE') && (
+            <CountdownBadge
+              fechaInicio={(item as any).fecha_inicio}
+              fechaFin={(item as any).fecha_fin}
+            />
           )}
         </TouchableOpacity>
         <View style={styles.cardBody}>
@@ -156,28 +279,25 @@ export default function SubastasScreen() {
           <Text style={styles.cardSubtitulo}>
             {item.cantidad_articulos} artículos — {item.ubicacion}
           </Text>
-          {bloqueada ? (
-            <TouchableOpacity
-              style={styles.botonMejorar}
-              onPress={() => router.push('/(tabs)/perfil')}
-            >
-              <Text style={styles.botonMejorarTexto}>MEJORAR MEMBRESÍA</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.botonCatalogo}
-              onPress={() => router.push({
+          <TouchableOpacity
+            style={[styles.botonCatalogo, bloqueada && styles.botonCatalogoDisabled]}
+            onPress={() => {
+              if (bloqueada) return;
+              router.push({
                 pathname: '/catalogo/[id]',
                 params: { id: String(item.subasta_id ?? item.id), titulo: item.titulo },
-              })}
-            >
-              <Text style={styles.botonCatalogoTexto}>VER CATÁLOGO</Text>
-            </TouchableOpacity>
-          )}
+              });
+            }}
+            disabled={bloqueada}
+          >
+            <Text style={[styles.botonCatalogoTexto, bloqueada && styles.botonCatalogoTextoDisabled]}>
+              {estado === 'FINALIZADA' ? 'VER SUBASTA' : 'VER CATÁLOGO'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
     );
-  };
+  }
 
   const renderFooter = () => {
     if (!cargandoMas) return null;
@@ -186,8 +306,16 @@ export default function SubastasScreen() {
 
   if (cargando && subastas.length === 0) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#000" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitulo}>SUBASTAS</Text>
+        </View>
+        <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
+          <Skeleton width="100%" height={40} borderRadius={8} style={{ marginBottom: 12 }} />
+        </View>
+        <View style={{ paddingHorizontal: 20 }}>
+          <SkeletonList rows={5} gap={14} />
+        </View>
       </SafeAreaView>
     );
   }
@@ -262,7 +390,7 @@ export default function SubastasScreen() {
       <FlatList
         data={subastas}
         keyExtractor={(item, index) => String(item?.subasta_id ?? item?.id ?? index)}
-        renderItem={renderSubastaCard}
+        renderItem={({ item, index }) => <SubastaCard item={item} index={index} />}
         contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
@@ -301,7 +429,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   sectionHeaderTitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: '#666',
     letterSpacing: 2,
@@ -310,7 +438,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: '#666',
     letterSpacing: 2,
@@ -346,13 +474,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  imagenBloqueada: {
-    flex: 1,
-    backgroundColor: '#959595',
+  overlayBloqueada: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(120, 120, 120, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 8,
   },
   textoAcceso: {
     color: '#fff',
@@ -360,29 +491,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
   },
-  badgeVivo: {
+  badge: {
     position: 'absolute',
     top: 12,
     right: 12,
-    backgroundColor: '#000',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  badgeVivoTexto: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-  badgeProximamente: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: '#FFF',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  badgeProximamenteTexto: { color: '#000', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  badgeTexto: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   cardBody: { paddingTop: 12, gap: 4 },
-  cardTitulo: { fontSize: 18, fontWeight: '700', color: '#000' },
-  cardSubtitulo: { fontSize: 11, color: '#666', marginBottom: 8 },
+  cardTitulo: { fontSize: 20, fontWeight: '700', color: '#000' },
+  cardSubtitulo: { fontSize: 16, color: '#666', marginBottom: 8 },
   botonCatalogo: {
     borderWidth: 1,
     borderColor: '#000',
@@ -391,15 +511,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  botonCatalogoTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 2 },
-  botonMejorar: {
-    borderWidth: 1,
-    borderColor: '#000',
-    borderRadius: 20,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-    backgroundColor: 'transparent',
-  },
-  botonMejorarTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 2 },
+  botonCatalogoTexto: { fontSize: 13, fontWeight: '700', color: '#000', letterSpacing: 2 },
+  botonCatalogoDisabled: { opacity: 0.5 },
+  botonCatalogoTextoDisabled: { color: '#000' },
 });

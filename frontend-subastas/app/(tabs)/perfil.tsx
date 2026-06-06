@@ -19,6 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/src/context/AuthContext';
 import { Button } from '@/src/components/Button';
+import { SkeletonCircle, SkeletonLine } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 interface PerfilData {
@@ -352,7 +353,7 @@ export default function Perfil() {
         style: 'destructive',
         onPress: async () => {
           await removeToken();
-          router.replace('/(auth)/login');
+          router.replace('/login');
         },
       },
     ]);
@@ -401,8 +402,32 @@ export default function Perfil() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#000" style={{ flex: 1 }} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerBack} />
+          <Text style={styles.headerTitle}>REMATIX</Text>
+          <View style={styles.headerBack} />
+        </View>
+        <View style={{ padding: 20 }}>
+          <View style={{ alignItems: 'center', marginBottom: 30 }}>
+            <SkeletonCircle size={100} />
+            <View style={{ height: 16 }} />
+            <SkeletonLine width={180} height={18} />
+            <View style={{ height: 8 }} />
+            <SkeletonLine width={100} height={12} />
+          </View>
+          <View style={{ gap: 14, marginBottom: 25 }}>
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+            <SkeletonLine width="100%" height={56} borderRadius={12} />
+          </View>
+          <View style={{ gap: 8 }}>
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+            <SkeletonLine width="100%" height={50} borderRadius={10} />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -603,14 +628,18 @@ export default function Perfil() {
 
         {/* Menú de opciones */}
         <View style={styles.menu}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/billetera')}>
-            <Text style={styles.menuItemText}>Medios de Pago</Text>
-            <Ionicons name="chevron-forward" size={20} color="#888" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/metricas-historial')}>
-            <Text style={styles.menuItemText}>Métricas e Historial</Text>
-            <Ionicons name="chevron-forward" size={20} color="#888" />
-          </TouchableOpacity>
+          {!isAdmin && (
+            <>
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/billetera')}>
+                <Text style={styles.menuItemText}>Medios de Pago</Text>
+                <Ionicons name="chevron-forward" size={20} color="#888" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/metricas-historial')}>
+                <Text style={styles.menuItemText}>Métricas e Historial</Text>
+                <Ionicons name="chevron-forward" size={20} color="#888" />
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/historial')}>
             <View style={styles.menuItemRow}>
               <Text style={styles.menuItemText}>Estado de Cuenta</Text>
@@ -630,7 +659,7 @@ export default function Perfil() {
           </TouchableOpacity>
 
         {/* Cambiar Contraseña */}
-        <TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/(auth)/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
+<TouchableOpacity style={styles.cambiarClaveButton} onPress={() => router.push(`/recuperar-clave?email=${encodeURIComponent(perfil.usuario.email)}`)}>
           <Ionicons name="lock-closed-outline" size={20} color="#000" />
           <Text style={styles.cambiarClaveText}>CAMBIAR CONTRASEÑA</Text>
         </TouchableOpacity>
@@ -665,7 +694,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 26,
     fontWeight: '700',
     letterSpacing: 3,
     color: '#000',
@@ -715,13 +744,13 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   nombre: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#000',
     marginBottom: 4,
   },
   nombreInput: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#000',
     marginBottom: 4,
@@ -732,13 +761,13 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   nivel: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '600',
     color: '#666',
     letterSpacing: 2,
   },
   duenioStatus: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     marginTop: 6,
   },
@@ -764,13 +793,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#000',
     letterSpacing: 2,
   },
   saveText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#000',
   },
@@ -784,19 +813,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   fieldLabel: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '600',
     color: '#999',
     letterSpacing: 1,
     marginBottom: 4,
   },
   fieldValue: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#000',
     flex: 1,
   },
   fieldInput: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#000',
     borderBottomWidth: 1,
     borderBottomColor: '#D0D0D0',
@@ -818,7 +847,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#DDD',
   },
   cobroTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#000',
     letterSpacing: 2,
@@ -835,14 +864,14 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
   },
   adminTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
     color: '#000',
     marginBottom: 6,
   },
   duenioTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
     color: '#2E7D32',
@@ -910,9 +939,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   menuItemText: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
+    color: '#373636',
   },
   menuItemRow: {
     flexDirection: 'row',

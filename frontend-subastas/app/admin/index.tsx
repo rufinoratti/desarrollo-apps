@@ -11,7 +11,6 @@ import {
   Platform,
   Modal,
   LayoutAnimation,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -21,6 +20,7 @@ import { API_URL } from '@/src/config/env';
 import { Button } from '@/src/components/Button';
 import { Input } from '@/src/components/Input';
 import { Select } from '@/src/components/Select';
+import { SkeletonList } from '@/src/components/Skeleton';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
@@ -121,6 +121,7 @@ export default function AdminPanel() {
   const [comisionAprobar, setComisionAprobar] = useState('');
   const [subastaIdAprobar, setSubastaIdAprobar] = useState<number | null>(null);
   const [subastaLabelAprobar, setSubastaLabelAprobar] = useState('');
+  const [cerrandoSubasta, setCerrandoSubasta] = useState<string | null>(null);
 
   const switchTab = (key: typeof tab) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -142,7 +143,6 @@ export default function AdminPanel() {
 
   const minFecha = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 11);
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
@@ -152,10 +152,6 @@ export default function AdminPanel() {
       if (event?.type === 'dismissed' || !selectedDate) return;
     }
     if (!selectedDate) return;
-    if (selectedDate < minFecha) {
-      Alert.alert('Fecha inválida', 'La fecha debe ser al menos 11 días a partir de hoy.');
-      return;
-    }
     setFechaPickerValue(selectedDate);
     setFormSubasta((prev) => ({ ...prev, fecha: formatFecha(selectedDate) }));
   };
@@ -473,7 +469,12 @@ export default function AdminPanel() {
         }),
       });
       if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) { Alert.alert('Error', 'No se pudo crear la subasta.'); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.log('[ERROR CREAR SUBASTA]', res.status, errData);
+        Alert.alert('Error', errData.error || 'No se pudo crear la subasta.');
+        return;
+      }
       Alert.alert('Listo', 'Subasta creada exitosamente.');
       setFormSubasta({ nombre: '', fecha: '', hora: '', ubicacion: '', capacidadasistentes: '', tienedeposito: '', seguridadpropia: '', categoria: '', tematica: 0 });
       setImagenUri(null); setImagenFile(null);
@@ -482,6 +483,35 @@ export default function AdminPanel() {
       const message = e instanceof Error ? e.message : 'No se pudo crear la subasta.';
       Alert.alert('Error', message);
     } finally { setGuardandoSubasta(false); }
+  };
+
+  const handleCerrarSubasta = async (id: string | number) => {
+    Alert.alert(
+      'Cerrar subasta',
+      '¿Estás seguro de que querés cerrar esta subasta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar',
+          style: 'destructive',
+          onPress: async () => {
+            setCerrandoSubasta(String(id));
+            try {
+              const res = await fetch(`${API_URL}/api/admin/subastas/${id}/cerrar`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (res.status === 401) { handleUnauthorized(); return; }
+              if (!res.ok) { const err = await res.json().catch(() => ({})); Alert.alert('Error', err.error || 'No se pudo cerrar la subasta.'); return; }
+              Alert.alert('Listo', 'Subasta cerrada correctamente.');
+              await cargarDatos();
+            } catch {
+              Alert.alert('Error', 'No se pudo cerrar la subasta.');
+            } finally { setCerrandoSubasta(null); }
+          },
+        },
+      ],
+    );
   };
 
   if (!token) {
@@ -531,9 +561,8 @@ export default function AdminPanel() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color="#0F172A" />
-            <Text style={styles.loadingText}>Cargando datos...</Text>
+          <View style={styles.section}>
+            <SkeletonList rows={4} gap={10} />
           </View>
         ) : null}
 
@@ -830,6 +859,61 @@ export default function AdminPanel() {
             </View>
 
             <Button title="Crear subasta" onPress={handleCrearSubasta} loading={guardandoSubasta} style={styles.submitButton} />
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Subastas existentes ({subastasLista.length})</Text>
+
+              {subastasLista.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="hammer-outline" size={48} color="#CBD5E1" />
+                  <Text style={styles.emptyStateText}>No hay subastas</Text>
+                </View>
+              ) : (
+                subastasLista.map((s) => {
+                  const abierta = s.estado?.toLowerCase() === 'abierta';
+                  return (
+                    <View key={String(s.id)} style={styles.card}>
+                      <View style={styles.cardRow}>
+                        <View style={[styles.avatar, { backgroundColor: abierta ? '#D1FAE5' : '#F1F5F9' }]}>
+                          <Ionicons name={abierta ? 'checkmark-circle' : 'lock-closed'} size={20} color={abierta ? '#059669' : '#94A3B8'} />
+                        </View>
+                        <View style={styles.cardBody}>
+                          <View style={styles.cardTitleRow}>
+                            <Text style={styles.cardName}>{s.nombre || `Subasta #${s.id}`}</Text>
+                            <View style={[styles.badge, abierta ? styles.badgePending : { backgroundColor: '#E2E8F0' }]}>
+                              <Text style={[styles.badgePendingText, !abierta && { color: '#64748B' }]}>
+                                {abierta ? 'ABIERTA' : 'CERRADA'}
+                              </Text>
+                            </View>
+                          </View>
+                          {s.fecha ? (
+                            <View style={styles.cardInfoRow}>
+                              <Ionicons name="calendar-outline" size={12} color="#94A3B8" />
+                              <Text style={styles.cardInfoText}>{s.fecha}</Text>
+                            </View>
+                          ) : null}
+                          {s.tematica ? (
+                            <View style={styles.cardInfoRow}>
+                              <Ionicons name="pricetag-outline" size={12} color="#94A3B8" />
+                              <Text style={styles.cardInfoText}>{s.tematica}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                      {abierta ? (
+                        <Button
+                          title="CERRAR SUBASTA"
+                          onPress={() => handleCerrarSubasta(s.id)}
+                          loading={cerrandoSubasta === String(s.id)}
+                          variant="secondary"
+                          style={styles.actionButton}
+                        />
+                      ) : null}
+                    </View>
+                  );
+                })
+              )}
+            </View>
 
             <Modal visible={showFechaPicker} transparent animationType="slide">
               <View style={styles.pickerModalOverlay}>

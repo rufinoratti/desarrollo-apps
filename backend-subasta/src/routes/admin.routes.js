@@ -77,4 +77,7 @@ router.get('/admin/subastas/:id/catalogos', authMiddleware, adminController.list
 // Crear catálogo
 router.post('/admin/catalogos', authMiddleware, adminController.crearCatalogo);
 
+// Cerrar subasta manualmente
+router.post('/admin/subastas/:id/cerrar', authMiddleware, adminController.cerrarSubasta);
+
 module.exports = router;

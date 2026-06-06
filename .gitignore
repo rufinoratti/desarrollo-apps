@@ -1,4 +1,13 @@
-node_modules/
+# Globales (aplican a todo)
+.DS_Store
 .env
-.env.local
+.env.*
 .env.*.local
+.vscode/
+.idea/
+
+# Carpetas de dependencias globales
+node_modules/
+
+# Coverage de tests (si corres jest desde la raiz)
+coverage/

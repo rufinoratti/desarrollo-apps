@@ -332,12 +332,6 @@ const crearSubasta = async ({ payload }) => {
         throw err;
     }
 
-    if (fechaHora.getTime() < Date.now()) {
-        const err = new AppError('Datos de subasta inválidos', 400);
-        err.codigo = 'FECHA_INVALIDA';
-        throw err;
-    }
-
     const tieneDeposito = tienedeposito ? normalizeLower(tienedeposito) : null;
     const seguridad = seguridadpropia ? normalizeLower(seguridadpropia) : null;
 
@@ -366,7 +360,7 @@ const crearSubasta = async ({ payload }) => {
                 seguridadpropia: seguridad || null,
                 categoria: String(categoria).trim(),
                 tematica,
-                estado: 'abierta',
+                estado: fechaHora.getTime() > Date.now() ? 'cerrada' : 'abierta',
                 imagen: imagen || null
             })
             .select('identificador, nombre, fecha, hora, ubicacion, categoria, tematica, estado, imagen')

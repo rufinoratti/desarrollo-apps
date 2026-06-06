@@ -32,11 +32,15 @@ const publicRoutes = [
   '/(auth)/recuperar-clave', '/(auth)/restablecer-clave',
   '/(auth)/registro/paso1', '/(auth)/registro/paso2',
   '/(auth)/registro/paso3', '/(auth)/registro/paso4-pago',
+  '/onboarding', '/login', '/recuperar-clave', '/restablecer-clave',
+  '/registro/paso1', '/registro/paso2', '/registro/paso3', '/registro/paso4-pago',
 ];
 
 function useAuthRedirect(token: string | null, pending: boolean, isLoading: boolean) {
   const pathname = usePathname();
   const didRedirect = useRef(false);
+
+  const normalizedPath = pathname.replace(/\/\([^/]+\)/g, '');
 
   useEffect(() => {
     if (token) didRedirect.current = false;
@@ -47,7 +51,7 @@ function useAuthRedirect(token: string | null, pending: boolean, isLoading: bool
     if (didRedirect.current) return;
 
     if (pending && !token) {
-      if (!pathname.startsWith('/(tabs)/perfil')) {
+      if (!normalizedPath.startsWith('/(tabs)/perfil') && !normalizedPath.startsWith('/perfil')) {
         didRedirect.current = true;
         router.replace('/(tabs)/perfil');
       }
@@ -55,13 +59,13 @@ function useAuthRedirect(token: string | null, pending: boolean, isLoading: bool
     }
 
     if (!token) {
-      const isPublic = publicRoutes.some((r) => (r === '/' ? pathname === '/' : pathname.startsWith(r)));
+      const isPublic = publicRoutes.some((r) => (r === '/' ? normalizedPath === '/' : normalizedPath.startsWith(r)));
       if (!isPublic) {
         didRedirect.current = true;
         router.replace('/(auth)/login');
       }
     }
-  }, [token, isLoading, pathname]);
+  }, [token, isLoading, normalizedPath]);
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {

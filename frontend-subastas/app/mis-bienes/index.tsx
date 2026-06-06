@@ -4,6 +4,7 @@ import { router, Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/src/context/AuthContext';
+import { SkeletonList } from '@/src/components/Skeleton';
 import { API_URL } from '@/src/config/env';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -160,8 +161,18 @@ export default function MisBienesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#000" style={{ flex: 1 }} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
+            <Ionicons name="chevron-back" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>MIS BIENES</Text>
+          <View style={styles.headerBack} />
+        </View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 10 }}>
+          <SkeletonList rows={4} gap={14} />
+        </View>
       </SafeAreaView>
     );
   }
