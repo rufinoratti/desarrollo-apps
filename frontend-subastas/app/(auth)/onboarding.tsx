@@ -17,7 +17,7 @@ const ONBOARDING_DATA = [
     id: 2,
     title: 'Pujar es fácil',
     subtitle: 'Elegí un producto, hacé tu oferta y seguí la subasta en vivo',
-    image: 'https://m.media-amazon.com/images/I/61sKw8b3S9L._AC_UF894,1000_QL80_.jpg', // Arte/Mona Lisa simulación
+    image: 'https://m.media-amazon.com/images/I/61sKw8b3S9L._AC_UF894,1000_QL80_.jpg', // Mona Lisa simulación
   },
   {
     id: 3,

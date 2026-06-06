@@ -5,7 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
+  
   RefreshControl,
   Animated,
   Easing,

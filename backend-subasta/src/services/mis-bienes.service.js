@@ -297,6 +297,7 @@ const listarMisBienes = async (authUser) => {
     };
 };
 
+
 const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;
     if (!clienteId) {
@@ -313,7 +314,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             disponible: null,
             revisor: payload.revisor,
             duenio: clienteId,
-            seguro: payload.seguro || null,
             preciosugerido: parseNumber(payload?.preciosugerido) || null
         };
         productos.push(nuevo);
@@ -326,8 +326,15 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const descripcioncatalogo = String(payload?.descripcioncatalogo || '').trim();
     const descripcioncompleta = String(payload?.descripcioncompleta || '').trim();
     const revisorId = parseNumber(payload?.revisor);
-    const seguro = payload?.seguro ? String(payload.seguro).trim() : null;
     const precioSugerido = parseNumber(payload?.preciosugerido);
+
+    // Datos del seguro
+    const seguroNroPoliza = String(payload?.seguro_nropoliza || '').trim();
+    const seguroCompania = String(payload?.seguro_compania || '').trim();
+    const seguroImporte = parseNumber(payload?.seguro_importe);
+    const seguroPolizaCombinada = ['si', 'no'].includes(String(payload?.seguro_polizacombinada || '').toLowerCase())
+        ? String(payload.seguro_polizacombinada).toLowerCase()
+        : 'no';
 
     if (!descripcioncatalogo || !descripcioncompleta || !revisorId || !precioSugerido) {
         const err = new AppError('Datos inválidos', 400);
@@ -341,12 +348,46 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         throw err;
     }
 
+    if (!seguroNroPoliza || !seguroCompania || !seguroImporte || seguroImporte <= 0) {
+        const err = new AppError('Datos del seguro inválidos o incompletos', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
     if (!Array.isArray(files) || files.length === 0) {
         const err = new AppError('Debe subir al menos una imagen', 400);
         err.codigo = 'SIN_IMAGEN';
         throw err;
     }
 
+    // 1. Verificar que el nropoliza no esté ya usado
+    const { data: polizaExistente } = await supabase
+        .from('seguros')
+        .select('nropoliza')
+        .eq('nropoliza', seguroNroPoliza)
+        .maybeSingle();
+
+    if (polizaExistente) {
+        const err = new AppError('El número de póliza ya existe', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
+    // 2. Crear el seguro primero
+    const { error: seguroError } = await supabase
+        .from('seguros')
+        .insert({
+            nropoliza: seguroNroPoliza,
+            compania: seguroCompania,
+            importe: seguroImporte,
+            polizacombinada: seguroPolizaCombinada
+        });
+
+    if (seguroError) {
+        throw new AppError('Error al registrar seguro: ' + seguroError.message, 500);
+    }
+
+    // 3. Crear el producto linkeado al seguro
     const { data: producto, error: productoError } = await supabase
         .from('productos')
         .insert({
@@ -357,17 +398,20 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             preciosugerido: precioSugerido,
             revisor: revisorId,
             duenio: clienteId,
-            seguro: seguro || null
+            seguro: seguroNroPoliza
         })
         .select('identificador')
         .single();
 
     if (productoError) {
+        // Si falla el producto, borramos el seguro para no dejar datos huérfanos
+        await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);
         throw new AppError('Error al crear producto: ' + productoError.message, 500);
     }
 
     const productoId = producto?.identificador;
 
+    // 4. Subir las fotos
     try {
         const fotosPayload = files.map((file) => ({
             producto: productoId,
@@ -382,8 +426,10 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             throw new AppError('Error al guardar fotos: ' + fotosError.message, 500);
         }
     } catch (error) {
+        // Rollback completo si fallan las fotos
         await supabase.from('fotos').delete().eq('producto', productoId);
         await supabase.from('productos').delete().eq('identificador', productoId);
+        await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);
         throw error;
     }
 
@@ -392,6 +438,7 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         producto_id: String(productoId)
     };
 };
+
 
 const retirarProducto = async ({ authUser, productoId }) => {
     const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;
