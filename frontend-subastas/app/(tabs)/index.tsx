@@ -188,8 +188,9 @@ function SubastaCard({ item, index }: { item: Subasta; index: number }) {
 }
 
 export default function Home() {
-  const { nombre, token, removeToken, isLoading } = useAuth();
+  const { nombre, email, token, removeToken, isLoading } = useAuth();
   
+  const isAdmin = String(email || '').toLowerCase() === 'admin@rematix.com';
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [subastas, setSubastas] = useState<Subasta[]>([]);
   const [categoriaActiva, setCategoriaActiva] = useState<number | null>(null);
@@ -325,11 +326,15 @@ const fetchCategorias = async () => {
               )}
             </View>
 
-            <Text style={[styles.sectionTitle, { marginLeft: 20, marginBottom: 16 }]}>GESTIÓN DE FONDOS</Text>
-            <TouchableOpacity style={styles.walletBanner} onPress={() => router.push('/(tabs)/billetera')}>
-              <Text style={styles.walletText}>BILLETERA</Text>
-              <Ionicons name="wallet-outline" size={32} color="#FFF" />
-            </TouchableOpacity>
+            {!isAdmin && (
+              <>
+                <Text style={[styles.sectionTitle, { marginLeft: 20, marginBottom: 16 }]}>GESTIÓN DE FONDOS</Text>
+                <TouchableOpacity style={styles.walletBanner} onPress={() => router.push('/(tabs)/billetera')}>
+                  <Text style={styles.walletText}>BILLETERA</Text>
+                  <Ionicons name="wallet-outline" size={32} color="#FFF" />
+                </TouchableOpacity>
+              </>
+            )}
 
             <Text style={[styles.sectionTitle, { marginLeft: 20, marginBottom: 16}]}>SUBASTAS ACTIVAS</Text>
 

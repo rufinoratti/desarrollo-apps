@@ -628,14 +628,18 @@ export default function Perfil() {
 
         {/* Menú de opciones */}
         <View style={styles.menu}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/billetera')}>
-            <Text style={styles.menuItemText}>Medios de Pago</Text>
-            <Ionicons name="chevron-forward" size={20} color="#888" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/metricas-historial')}>
-            <Text style={styles.menuItemText}>Métricas e Historial</Text>
-            <Ionicons name="chevron-forward" size={20} color="#888" />
-          </TouchableOpacity>
+          {!isAdmin && (
+            <>
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/billetera')}>
+                <Text style={styles.menuItemText}>Medios de Pago</Text>
+                <Ionicons name="chevron-forward" size={20} color="#888" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/metricas-historial')}>
+                <Text style={styles.menuItemText}>Métricas e Historial</Text>
+                <Ionicons name="chevron-forward" size={20} color="#888" />
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/historial')}>
             <View style={styles.menuItemRow}>
               <Text style={styles.menuItemText}>Estado de Cuenta</Text>
