@@ -283,8 +283,8 @@ const fetchCategorias = async () => {
           <Text style={styles.headerTitle}>Bienvenido/a</Text>
           <Text style={styles.headerName}>{nombre || 'Usuario'}</Text>
         </View>
-        <TouchableOpacity style={styles.profileIcon}>
-          <Ionicons name="person-outline" size={24} color="#000" />
+        <TouchableOpacity style={styles.profileIcon} onPress={() => router.push('/(tabs)/pujas-actuales')}>
+          <Ionicons name="notifications-outline" size={24} color="#000" />
         </TouchableOpacity>
       </View>
 
@@ -350,29 +350,29 @@ const fetchCategorias = async () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 10 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold' },
-  headerName: { fontSize: 20, fontWeight: '900' },
+  headerTitle: { fontSize: 27, fontWeight: 'bold' },
+  headerName: { fontSize: 23, fontWeight: '900' },
   profileIcon: { padding: 5 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 15 },
-  sectionTitle: { fontSize: 10, fontWeight: 'bold', color: '#888', letterSpacing: 1 },
+  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#888', letterSpacing: 1 },
   sectionTitle2: { fontSize: 16, fontWeight: 'bold', color: '#000', marginBottom: 15 },
   linkText: { fontSize: 10, fontWeight: 'bold', color: '#000', letterSpacing: 1, textDecorationLine: 'underline' },
   catChip: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: '#EEE', marginRight: 10 },
   catChipActive: { backgroundColor: '#000' },
-  catText: { fontSize: 12, fontWeight: 'bold', color: '#555' },
+  catText: { fontSize: 15, fontWeight: 'bold', color: '#555' },
   catTextActive: { color: '#FFF' },
-  walletBanner: { backgroundColor: '#0A0A0A', marginHorizontal: 20, borderRadius: 16, padding: 25, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-  walletText: { color: '#FFF', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
+  walletBanner: { backgroundColor: '#0A0A0A', marginHorizontal: 20, borderRadius: 16, padding: 17, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+  walletText: { color: '#FFF', fontSize: 18, fontWeight: 'bold', letterSpacing: 1 },
   listContent: { paddingBottom: 40 },
   card: { marginHorizontal: 20, marginBottom: 30 },
   imageContainer: { width: '100%', height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 15 },
   cardImage: { width: '100%', height: '100%' },
   badge: { position: 'absolute', top: 15, right: 15, backgroundColor: '#000', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  badgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-  cardSubtitle: { fontSize: 12, color: '#666', marginBottom: 15 },
-  cardButton: { borderWidth: 1, borderColor: '#000', borderRadius: 25, paddingVertical: 15, alignItems: 'center' },
-  cardButtonText: { fontSize: 12, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
+  badgeText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
+  cardTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 5 },
+  cardSubtitle: { fontSize: 14, color: '#666', marginBottom: 15 },
+  cardButton: { borderWidth: 1, borderColor: '#000', borderRadius: 25, paddingVertical: 10, alignItems: 'center' },
+  cardButtonText: { fontSize: 14, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
   cardButtonDisabled: { opacity: 0.5 },
   cardButtonTextDisabled: { color: '#000' },
   overlayBloqueada: {

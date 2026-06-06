@@ -500,7 +500,7 @@ const styles = StyleSheet.create({
   logo: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
   content: { padding: 20, paddingTop: 10 },
   subtitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   mensajePrincipal: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#000',
     textAlign: 'center',
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1.5,
@@ -604,13 +604,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemLabel: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '700',
     color: '#000',
     marginBottom: 2,
   },
   itemDetalle: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#666',
     fontWeight: '500',
   },
@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   itemStatusText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
@@ -638,7 +638,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   bankLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     fontWeight: '600',
     width: 80,
@@ -662,14 +662,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   infoLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     fontWeight: '600',
     width: 80,
   },
   infoValue: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 16,
     color: '#000',
     fontWeight: '700',
   },
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   ctaButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
     color: '#000',
     letterSpacing: 1,

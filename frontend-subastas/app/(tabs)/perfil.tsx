@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: 18,
+    fontSize: 26,
     fontWeight: '700',
     letterSpacing: 3,
     color: '#000',
@@ -740,13 +740,13 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   nombre: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#000',
     marginBottom: 4,
   },
   nombreInput: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#000',
     marginBottom: 4,
@@ -757,13 +757,13 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   nivel: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '600',
     color: '#666',
     letterSpacing: 2,
   },
   duenioStatus: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     marginTop: 6,
   },
@@ -789,13 +789,13 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#000',
     letterSpacing: 2,
   },
   saveText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#000',
   },
@@ -809,19 +809,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   fieldLabel: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '600',
     color: '#999',
     letterSpacing: 1,
     marginBottom: 4,
   },
   fieldValue: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#000',
     flex: 1,
   },
   fieldInput: {
-    fontSize: 15,
+    fontSize: 17,
     color: '#000',
     borderBottomWidth: 1,
     borderBottomColor: '#D0D0D0',
@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#DDD',
   },
   cobroTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#000',
     letterSpacing: 2,
@@ -860,14 +860,14 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
   },
   adminTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
     color: '#000',
     marginBottom: 6,
   },
   duenioTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: 2,
     color: '#2E7D32',
@@ -935,9 +935,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   menuItemText: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#000',
+    color: '#373636',
   },
   menuItemRow: {
     flexDirection: 'row',

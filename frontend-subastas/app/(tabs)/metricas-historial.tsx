@@ -140,14 +140,14 @@ const styles = StyleSheet.create({
   logo: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
   content: { padding: 20, paddingTop: 10 },
   subtitle: {
-    fontSize: 10,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,
     marginBottom: 5,
   },
   title: {
-    fontSize: 22,
+    fontSize: 27,
     fontWeight: 'bold',
     marginBottom: 25,
   },
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '47%',
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#cdd3d5',
     borderRadius: 14,
     padding: 18,
     alignItems: 'center',
@@ -180,14 +180,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: '600',
     color: '#888',
     textAlign: 'center',
     letterSpacing: 1,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#888',
     letterSpacing: 1,

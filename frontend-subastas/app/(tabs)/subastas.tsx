@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   sectionHeaderTitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: '#666',
     letterSpacing: 2,
@@ -438,7 +438,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 16,
     fontWeight: '700',
     color: '#666',
     letterSpacing: 2,
@@ -499,10 +499,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 6,
   },
-  badgeTexto: { color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  badgeTexto: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   cardBody: { paddingTop: 12, gap: 4 },
-  cardTitulo: { fontSize: 18, fontWeight: '700', color: '#000' },
-  cardSubtitulo: { fontSize: 11, color: '#666', marginBottom: 8 },
+  cardTitulo: { fontSize: 20, fontWeight: '700', color: '#000' },
+  cardSubtitulo: { fontSize: 16, color: '#666', marginBottom: 8 },
   botonCatalogo: {
     borderWidth: 1,
     borderColor: '#000',
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  botonCatalogoTexto: { fontSize: 11, fontWeight: '700', color: '#000', letterSpacing: 2 },
+  botonCatalogoTexto: { fontSize: 13, fontWeight: '700', color: '#000', letterSpacing: 2 },
   botonCatalogoDisabled: { opacity: 0.5 },
   botonCatalogoTextoDisabled: { color: '#000' },
 });
