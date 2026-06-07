@@ -34,8 +34,7 @@ const subirPortadaSubasta = async (req, res, next) => {
     try {
         const result = await adminService.subirPortadaSubasta({
             authUser: req.user,
-            file: req.file,
-            baseUrl: `${req.protocol}://${req.get('host')}`
+            file: req.file
         });
         return res.status(200).json(result);
     } catch (error) {

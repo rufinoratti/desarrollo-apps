@@ -1,5 +1,6 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
+const storage = require('../config/storage');
 const { store, nextId } = require('./data.store');
 
 const normalizeLower = (value) => String(value || '').toLowerCase().trim();
@@ -297,28 +298,15 @@ const listarMisBienes = async (authUser) => {
     };
 };
 
-const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
-    const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;
-    if (!clienteId) {
-        throw new AppError('No autenticado', 401);
+
+const crearProducto = async ({ authUser, payload, files }) => {
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
     }
 
-    if (!isConfigured) {
-        const productos = store.productos || [];
-        const id = nextId('p', 'producto');
-        const nuevo = {
-            id,
-            descripcioncatalogo: payload.descripcioncatalogo,
-            descripcioncompleta: payload.descripcioncompleta,
-            disponible: null,
-            revisor: payload.revisor,
-            duenio: clienteId,
-            seguro: payload.seguro || null,
-            preciosugerido: parseNumber(payload?.preciosugerido) || null
-        };
-        productos.push(nuevo);
-        store.productos = productos;
-        return { mensaje: 'Producto creado', producto_id: id };
+    const clienteId = await resolveClienteIdSupabase(authUser);
+    if (!clienteId) {
+        throw new AppError('No autenticado', 401);
     }
 
     await ensureDuenioSupabase(clienteId);
@@ -326,8 +314,12 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const descripcioncatalogo = String(payload?.descripcioncatalogo || '').trim();
     const descripcioncompleta = String(payload?.descripcioncompleta || '').trim();
     const revisorId = parseNumber(payload?.revisor);
-    const seguro = payload?.seguro ? String(payload.seguro).trim() : null;
     const precioSugerido = parseNumber(payload?.preciosugerido);
+
+    const seguroNroPoliza = String(payload?.seguro_nropoliza || '').trim();
+    const seguroCompania = String(payload?.seguro_compania || '').trim();
+    const seguroImporte = parseNumber(payload?.seguro_importe);
+    const seguroPolizaCombinada = 'no';
 
     if (!descripcioncatalogo || !descripcioncompleta || !revisorId || !precioSugerido) {
         const err = new AppError('Datos inválidos', 400);
@@ -341,12 +333,63 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         throw err;
     }
 
+    if (!seguroNroPoliza || !seguroCompania || !seguroImporte || seguroImporte <= 0) {
+        const err = new AppError('Datos del seguro inválidos o incompletos', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
     if (!Array.isArray(files) || files.length === 0) {
         const err = new AppError('Debe subir al menos una imagen', 400);
         err.codigo = 'SIN_IMAGEN';
         throw err;
     }
 
+    console.log(`[mis-bienes.crearProducto] inicio seguro=${seguroNroPoliza} duenio=${clienteId} revisor=${revisorId}`);
+
+    // 1. Verificar que el nropoliza no esté ya usado
+    const { data: polizaExistente, error: polizaExistenteError } = await supabase
+        .from('seguros')
+        .select('nropoliza')
+        .eq('nropoliza', seguroNroPoliza)
+        .maybeSingle();
+
+    if (polizaExistenteError) {
+        console.error('[mis-bienes.crearProducto] Error consultando seguro existente:', polizaExistenteError);
+        throw new AppError('Error al validar póliza existente: ' + polizaExistenteError.message, 500);
+    }
+
+    if (polizaExistente) {
+        const err = new AppError('El número de póliza ya existe', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
+    // 2. Crear el seguro primero
+    const { data: seguroCreado, error: seguroError } = await supabase
+        .from('seguros')
+        .insert({
+            nropoliza: seguroNroPoliza,
+            compania: seguroCompania,
+            importe: seguroImporte,
+            polizacombinada: seguroPolizaCombinada
+        })
+        .select('nropoliza')
+        .single();
+
+    if (seguroError) {
+        console.error('[mis-bienes.crearProducto] Error insertando seguro:', seguroError);
+        throw new AppError('Error al registrar seguro: ' + seguroError.message, 500);
+    }
+
+    if (!seguroCreado?.nropoliza) {
+        console.error('[mis-bienes.crearProducto] RLS rechazó INSERT de seguro sin devolver error explícito');
+        throw new AppError('No se pudo registrar el seguro (verificar policies RLS de la tabla seguros)', 500);
+    }
+
+    console.log(`[mis-bienes.crearProducto] seguro creado nropoliza=${seguroCreado.nropoliza}`);
+
+    // 3. Crear el producto linkeado al seguro
     const { data: producto, error: productoError } = await supabase
         .from('productos')
         .insert({
@@ -357,21 +400,48 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             preciosugerido: precioSugerido,
             revisor: revisorId,
             duenio: clienteId,
-            seguro: seguro || null
+            seguro: seguroNroPoliza
         })
-        .select('identificador')
+        .select('identificador, seguro')
         .single();
 
     if (productoError) {
+        console.error('[mis-bienes.crearProducto] Error insertando producto, haciendo rollback del seguro:', productoError);
+        const { error: rollbackError } = await supabase
+            .from('seguros')
+            .delete()
+            .eq('nropoliza', seguroNroPoliza);
+        if (rollbackError) {
+            console.error('[mis-bienes.crearProducto] Error en rollback del seguro:', rollbackError);
+        }
         throw new AppError('Error al crear producto: ' + productoError.message, 500);
     }
 
-    const productoId = producto?.identificador;
+    if (!producto?.seguro) {
+        console.error(`[mis-bienes.crearProducto] ALERTA: producto ${producto?.identificador} creado pero sin seguro linkeado. Esperado: ${seguroNroPoliza}, recibido: ${producto?.seguro}`);
+    }
 
+    const productoId = producto?.identificador;
+    console.log(`[mis-bienes.crearProducto] producto creado id=${productoId} seguro=${producto?.seguro}`);
+
+    // 4. Subir las fotos a Supabase Storage (secuencial para tracking correcto
+    //    en caso de rollback; hasta 6 fotos, performance aceptable para MVP).
+    const urlsSubidas = [];
     try {
-        const fotosPayload = files.map((file) => ({
+        for (const file of files) {
+            const url = await storage.uploadBuffer({
+                folder: 'productos',
+                fieldname: file.fieldname,
+                buffer: file.buffer,
+                mimetype: file.mimetype,
+                originalname: file.originalname
+            });
+            urlsSubidas.push(url);
+        }
+
+        const fotosPayload = urlsSubidas.map((url) => ({
             producto: productoId,
-            foto_url: `${baseUrl}/uploads/${file.filename}`
+            foto_url: url
         }));
 
         const { error: fotosError } = await supabase
@@ -382,8 +452,15 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
             throw new AppError('Error al guardar fotos: ' + fotosError.message, 500);
         }
     } catch (error) {
+        console.error('[mis-bienes.crearProducto] Error guardando fotos, haciendo rollback completo:', error);
+        // Rollback de Storage: borrar las URLs que se subieron antes del fallo
+        if (urlsSubidas.length > 0) {
+            await Promise.all(urlsSubidas.map((u) => storage.remove(u).catch(() => {})));
+        }
+        // Rollback de BD: borrar registros en orden inverso al insert
         await supabase.from('fotos').delete().eq('producto', productoId);
         await supabase.from('productos').delete().eq('identificador', productoId);
+        await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);
         throw error;
     }
 
@@ -392,6 +469,7 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         producto_id: String(productoId)
     };
 };
+
 
 const retirarProducto = async ({ authUser, productoId }) => {
     const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;

@@ -1,5 +1,6 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
+const storage = require('../config/storage');
 const { store } = require('./data.store');
 
 const sanitizePerfilPayload = (payload = {}) => {
@@ -287,25 +288,47 @@ const subirFotoPerfil = async (authUser, file) => {
     if (!file) {
         throw new AppError('No se recibió ninguna imagen', 400);
     }
-
-    const filename = file.filename;
-
-    if (!isConfigured) {
-        const user = getLocalUser(authUser);
-        user.foto_perfil = filename;
-        const updated = await obtenerPerfil(authUser);
-        return { mensaje: 'Foto de perfil actualizada', ...updated };
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
     }
 
     const clienteId = await resolveClienteIdSupabase(authUser);
 
+    const { data: personaActual } = await supabase
+        .from('personas')
+        .select('foto_perfil')
+        .eq('identificador', clienteId)
+        .maybeSingle();
+
+    let nuevaUrl;
+    try {
+        nuevaUrl = await storage.uploadBuffer({
+            folder: 'perfiles',
+            fieldname: file.fieldname,
+            buffer: file.buffer,
+            mimetype: file.mimetype,
+            originalname: file.originalname
+        });
+    } catch (err) {
+        throw new AppError(`Error al subir foto a Storage: ${err.message}`, 500);
+    }
+
     const { error: updateError } = await supabase
         .from('personas')
-        .update({ foto_perfil: filename })
+        .update({ foto_perfil: nuevaUrl })
         .eq('identificador', clienteId);
 
     if (updateError) {
+        // Rollback: borrar el archivo recién subido porque no se pudo persistir en BD
+        await storage.remove(nuevaUrl).catch(() => {});
         throw new AppError('Error al guardar foto de perfil: ' + updateError.message, 500);
+    }
+
+    // Cleanup: borrar la foto anterior de Storage (no interrumpe el flujo si falla)
+    if (personaActual?.foto_perfil && personaActual.foto_perfil !== nuevaUrl) {
+        await storage.remove(personaActual.foto_perfil).catch((err) => {
+            console.error('[perfil.subirFotoPerfil] No se pudo borrar foto anterior:', err.message);
+        });
     }
 
     const updated = await obtenerPerfil(authUser);
@@ -313,14 +336,17 @@ const subirFotoPerfil = async (authUser, file) => {
 };
 
 const eliminarFotoPerfil = async (authUser) => {
-    if (!isConfigured) {
-        const user = getLocalUser(authUser);
-        user.foto_perfil = null;
-        const updated = await obtenerPerfil(authUser);
-        return { mensaje: 'Foto de perfil eliminada', ...updated };
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
     }
 
     const clienteId = await resolveClienteIdSupabase(authUser);
+
+    const { data: personaActual } = await supabase
+        .from('personas')
+        .select('foto_perfil')
+        .eq('identificador', clienteId)
+        .maybeSingle();
 
     const { error: updateError } = await supabase
         .from('personas')
@@ -329,6 +355,12 @@ const eliminarFotoPerfil = async (authUser) => {
 
     if (updateError) {
         throw new AppError('Error al eliminar foto de perfil: ' + updateError.message, 500);
+    }
+
+    if (personaActual?.foto_perfil) {
+        await storage.remove(personaActual.foto_perfil).catch((err) => {
+            console.error('[perfil.eliminarFotoPerfil] No se pudo borrar de Storage:', err.message);
+        });
     }
 
     const updated = await obtenerPerfil(authUser);

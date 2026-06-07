@@ -33,8 +33,7 @@ const crearProducto = async (req, res, next) => {
         const result = await misBienesService.crearProducto({
             authUser: req.user,
             payload: req.body,
-            files: req.files,
-            baseUrl: `${req.protocol}://${req.get('host')}`
+            files: req.files
         });
         return res.status(201).json(result);
     } catch (error) {

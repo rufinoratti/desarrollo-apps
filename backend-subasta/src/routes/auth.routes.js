@@ -22,49 +22,27 @@
 
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
 
 const authController = require('../controllers/auth.controller');
 const authMiddleware = require('../middlewares/auth');
-
+const { createUploader, multerErrorHandler } = require('../middlewares/upload');
 
 /**
  * ============================================================
- * CONFIGURACIÓN DE CARGA DE ARCHIVOS (MULTER)
+ * CONFIGURACIÓN DE CARGA DE ARCHIVOS (MULTER MEMORYSTORAGE)
  * ============================================================
- * 
- * Multer: middleware que captura archivos (PDFs, imágenes)
- * del request HTTP multipart/form-data.
- * 
- * - destination: dónde guardar los archivos en disco
- * - filename: cómo nombrar cada archivo (timestamp + aleatorio)
- * - limits: tamaño máximo 5MB
- * - fileFilter: solo JPEG/JPG/PNG/PDF
+ *
+ * Los archivos del paso 3 (DNI frente/dorso y foto de perfil) se
+ * reciben en memoria (Buffer en req.files[i].buffer) y se suben a
+ * Supabase Storage desde el servicio auth.service.paso3Registro.
+ * NO se persisten en disco local.
+ *
+ * - mimeTypes: solo JPEG/JPG/PNG (KYC estricto)
+ * - maxSize:   5MB por archivo
  */
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../../uploads'));
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
-});
-
-const upload = multer({
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-        // BUG-02 fix: solo se aceptan imágenes JPG/PNG para los documentos DNI
-        const allowedTypes = /jpeg|jpg|png/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-        if (extname && mimetype) {
-            return cb(null, true);
-        }
-        cb(new Error('Solo se permiten imágenes JPEG, JPG o PNG'));
-    }
+const upload = createUploader({
+    maxSize: 5 * 1024 * 1024,
+    mimeTypes: ['jpeg', 'jpg', 'png']
 });
 
 /**
@@ -88,43 +66,21 @@ router.post('/registro/paso1', authController.paso1Registro);
 router.post('/registro/paso2', authController.paso2Registro);
 
 /**
- * ============================================================
- * ERROR HANDLER PERSONALIZADO PARA MULTER
- * ============================================================
- * 
- * Captura errores de carga de archivos:
- * - LIMIT_FILE_SIZE: archivo mayor a 5MB
- * - Otros errores multer/validación
- */
-const errorHandler = (err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(413).json({ error: 'Archivo demasiado grande', codigo: 'ARCHIVO_GRANDE' });
-        }
-        return res.status(400).json({ error: err.message, codigo: 'UPLOAD_ERROR' });
-    }
-    if (err) {
-        return res.status(400).json({ error: err.message, codigo: 'UPLOAD_ERROR' });
-    }
-    next();
-};
-
-/**
  * PASO 3 DEL REGISTRO: Cargar DNI
  * POST /api/auth/registro/paso3
- * 
+ *
  * Middleware chain:
- *   1. upload.fields([...]) : Multer procesa archivos DNI frente/dorso
- *   2. errorHandler        : Captura errores de carga
- *   3. authController      : Lógica del negocio (guardar refs en BD)
- * 
- * El cliente envía: registro_id + 2 archivos (dni_frente, dni_dorso)
+ *   1. upload.fields([...])   : Multer procesa archivos en memoria
+ *   2. multerErrorHandler      : Captura errores de carga
+ *   3. authController          : Lógica del negocio (sube a Supabase Storage)
+ *
+ * El cliente envía: registro_id + 2 archivos (dni_frente, dni_dorso) + foto_perfil opcional
  */
 router.post('/registro/paso3', upload.fields([
     { name: 'dni_frente', maxCount: 1 },
     { name: 'dni_dorso', maxCount: 1 },
     { name: 'foto_perfil', maxCount: 1 }
-]), errorHandler, authController.paso3Registro);
+]), multerErrorHandler, authController.paso3Registro);
 
 /**
  * PASO 4 DEL REGISTRO: Pago

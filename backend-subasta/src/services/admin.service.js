@@ -1,5 +1,6 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
+const storage = require('../config/storage');
 const { store, nextId } = require('./data.store');
 
 const CATEGORIAS_CLIENTE = ['comun', 'especial', 'plata', 'oro', 'platino'];
@@ -289,19 +290,28 @@ const parseFechaHora = (fecha, hora) => {
     return value;
 };
 
-const subirPortadaSubasta = async ({ authUser, file, baseUrl }) => {
+const subirPortadaSubasta = async ({ authUser, file }) => {
     if (!file) {
         const err = new AppError('No se recibió ninguna imagen', 400);
         err.codigo = 'SIN_IMAGEN';
         throw err;
     }
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
+    }
 
-    const url = `${baseUrl}/uploads/${file.filename}`;
+    const url = await storage.uploadBuffer({
+        folder: 'portadas',
+        fieldname: file.fieldname,
+        buffer: file.buffer,
+        mimetype: file.mimetype,
+        originalname: file.originalname
+    });
 
     return {
         mensaje: 'Imagen subida exitosamente',
         url,
-        filename: file.filename
+        path: storage.extractPathFromUrl(url)
     };
 };
 

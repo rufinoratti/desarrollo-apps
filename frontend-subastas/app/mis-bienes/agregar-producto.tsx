@@ -22,18 +22,19 @@ export default function AgregarProductoScreen() {
   const [saving, setSaving] = useState(false);
 
   const [revisores, setRevisores] = useState<OpcionItem[]>([]);
-  const [seguros, setSeguros] = useState<OpcionItem[]>([]);
 
+  // Datos del producto
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [precioSugerido, setPrecioSugerido] = useState('');
-
   const [revisorId, setRevisorId] = useState<number | null>(null);
   const [revisorLabel, setRevisorLabel] = useState('');
-  const [seguroId, setSeguroId] = useState<number | null>(null);
-  const [seguroLabel, setSeguroLabel] = useState('');
-
   const [imagenes, setImagenes] = useState<{ uri: string; name: string; type: string }[]>([]);
+
+  // Datos del seguro
+  const [nroPoliza, setNroPoliza] = useState('');
+  const [compania, setCompania] = useState('');
+  const [importeSeguro, setImporteSeguro] = useState('');
 
   const fetchOpciones = useCallback(async () => {
     if (!token) return;
@@ -42,27 +43,18 @@ export default function AgregarProductoScreen() {
       const res = await fetch(`${API_URL}/api/mis-bienes/opciones`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 401) {
-        await removeToken();
-        return;
-      }
-      if (!res.ok) {
-        setLoading(false);
-        return;
-      }
+      if (res.status === 401) { await removeToken(); return; }
+      if (!res.ok) { setLoading(false); return; }
       const data = await res.json();
       setRevisores(data.revisores || []);
-      setSeguros(data.seguros || []);
     } catch {
-      // Silencioso
+      // silencioso
     } finally {
       setLoading(false);
     }
   }, [token, removeToken]);
 
-  useEffect(() => {
-    fetchOpciones();
-  }, [fetchOpciones]);
+  useEffect(() => { fetchOpciones(); }, [fetchOpciones]);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -70,21 +62,17 @@ export default function AgregarProductoScreen() {
       Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galería.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.7,
       allowsMultipleSelection: true,
     });
-
     if (result.canceled || !result.assets?.length) return;
-
     const nuevos = result.assets.map((asset, index) => ({
       uri: asset.uri,
       name: `producto-${Date.now()}-${index}.jpg`,
       type: asset.mimeType || 'image/jpeg',
     }));
-
     setImagenes((prev) => [...prev, ...nuevos].slice(0, 6));
   };
 
@@ -98,14 +86,17 @@ export default function AgregarProductoScreen() {
       descripcion.trim() &&
       precioSugerido.trim() &&
       revisorId &&
-      imagenes.length > 0
+      imagenes.length > 0 &&
+      nroPoliza.trim() &&
+      compania.trim() &&
+      importeSeguro.trim()
     );
-  }, [nombre, descripcion, precioSugerido, revisorId, imagenes]);
+  }, [nombre, descripcion, precioSugerido, revisorId, imagenes, nroPoliza, compania, importeSeguro]);
 
   const handleSubmit = async () => {
     if (!token) return;
     if (!canSubmit) {
-      Alert.alert('Faltan datos', 'Completá todos los campos obligatorios.');
+      Alert.alert('Faltan datos', 'Completá todos los campos obligatorios, incluyendo el seguro.');
       return;
     }
 
@@ -116,10 +107,18 @@ export default function AgregarProductoScreen() {
       formData.append('descripcioncompleta', descripcion.trim());
       formData.append('preciosugerido', precioSugerido.trim());
       formData.append('revisor', String(revisorId));
-      formData.append('seguro', seguroId ? String(seguroId) : '');
+      // Datos del seguro
+      formData.append('seguro_nropoliza', nroPoliza.trim());
+      formData.append('seguro_compania', compania.trim());
+      formData.append('seguro_importe', importeSeguro.trim());
 
       imagenes.forEach((img) => {
-        formData.append('fotos', img as any);
+        const file = {
+          uri: img.uri,
+          name: img.name,
+          type: img.type || 'image/jpeg',
+        } as any;
+        formData.append('fotos', file);
       });
 
       const res = await fetch(`${API_URL}/api/mis-bienes/productos`, {
@@ -128,10 +127,7 @@ export default function AgregarProductoScreen() {
         body: formData,
       });
 
-      if (res.status === 401) {
-        await removeToken();
-        return;
-      }
+      if (res.status === 401) { await removeToken(); return; }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -168,7 +164,6 @@ export default function AgregarProductoScreen() {
             <SkeletonLine width="100%" height={50} borderRadius={8} />
             <SkeletonLine width="100%" height={50} borderRadius={8} />
             <SkeletonLine width="100%" height={50} borderRadius={8} />
-            <SkeletonLine width="100%" height={50} borderRadius={8} />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -187,6 +182,8 @@ export default function AgregarProductoScreen() {
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Fotos */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Fotos del producto</Text>
           <View style={styles.imageGrid}>
@@ -207,6 +204,7 @@ export default function AgregarProductoScreen() {
           </View>
         </View>
 
+        {/* Datos del producto */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Datos del producto</Text>
           <Input label="Nombre" value={nombre} onChangeText={setNombre} placeholder="Ej: Reloj Suizo" />
@@ -226,6 +224,7 @@ export default function AgregarProductoScreen() {
           />
         </View>
 
+        {/* Revisor */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Asignaciones</Text>
           <Select
@@ -233,20 +232,35 @@ export default function AgregarProductoScreen() {
             value={revisorLabel}
             options={revisores}
             placeholder="Seleccionar revisor"
-            onSelect={(id, label) => {
-              setRevisorId(id);
-              setRevisorLabel(label);
-            }}
+            onSelect={(id, label) => { setRevisorId(id); setRevisorLabel(label); }}
           />
-          <Select
-            label="Seguro"
-            value={seguroLabel}
-            options={seguros}
-            placeholder="Sin seguro"
-            onSelect={(id, label) => {
-              setSeguroId(id);
-              setSeguroLabel(label);
-            }}
+        </View>
+
+        {/* Seguro */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Seguro del producto</Text>
+          <Text style={styles.sectionSubtitle}>
+            Ingresá los datos de la póliza que cubre este artículo.
+          </Text>
+          <Input
+            label="Número de póliza"
+            value={nroPoliza}
+            onChangeText={setNroPoliza}
+            placeholder="Ej: POL-2024-001"
+            autoCapitalize="characters"
+          />
+          <Input
+            label="Compañía aseguradora"
+            value={compania}
+            onChangeText={setCompania}
+            placeholder="Ej: Mapfre, Zurich, San Cristóbal"
+          />
+          <Input
+            label="Importe asegurado"
+            value={importeSeguro}
+            onChangeText={setImporteSeguro}
+            placeholder="Ej: 500000"
+            keyboardType="numeric"
           />
         </View>
 
@@ -264,29 +278,22 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700', letterSpacing: 2 },
   scroll: { flex: 1, paddingHorizontal: 20 },
   card: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 16 },
-  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#111', marginBottom: 12, letterSpacing: 1 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', color: '#111', marginBottom: 4, letterSpacing: 1 },
+  sectionSubtitle: { fontSize: 12, color: '#999', marginBottom: 16, lineHeight: 18 },
+
   imageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   imageBox: { width: 90, height: 90, borderRadius: 10, overflow: 'hidden' },
   image: { width: '100%', height: '100%' },
   imageRemove: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    position: 'absolute', top: 4, right: 4,
+    width: 20, height: 20, borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   imageAdd: {
-    width: 90,
-    height: 90,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#DDD',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 90, height: 90, borderRadius: 10,
+    borderWidth: 1, borderColor: '#DDD',
+    alignItems: 'center', justifyContent: 'center',
   },
   imageAddText: { marginTop: 4, fontSize: 10, color: '#666' },
 });

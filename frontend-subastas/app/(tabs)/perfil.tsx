@@ -493,7 +493,7 @@ export default function Perfil() {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             {perfil?.usuario?.foto_url ? (
-              <Image source={{ uri: `${API_URL}/uploads/${perfil.usuario.foto_url}` }} style={styles.avatarImage} />
+              <Image source={{ uri: perfil.usuario.foto_url }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarPlaceholder}>
                 <Ionicons name="person" size={50} color="#CCC" />
