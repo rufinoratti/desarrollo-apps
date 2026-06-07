@@ -54,9 +54,14 @@ async function uploadBuffer({ folder, fieldname, buffer, mimetype, originalname 
         throw new Error('[storage.uploadBuffer] `folder` y `fieldname` son requeridos');
     }
 
-    const finalBuffer = mimetype?.startsWith('image/')
-        ? await resizeImage(buffer)
-        : buffer;
+    let finalBuffer = buffer;
+    if (mimetype?.startsWith('image/')) {
+        try {
+            finalBuffer = await resizeImage(buffer);
+        } catch (err) {
+            console.error('[storage.uploadBuffer] Error en resizeImage:', err.message);
+        }
+    }
 
     const objectPath = buildObjectPath(folder, fieldname, originalname);
 

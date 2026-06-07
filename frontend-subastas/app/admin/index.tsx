@@ -15,7 +15,7 @@ import { SkeletonList } from '@/src/components/Skeleton';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
-const CATEGORIAS_CLIENTE = ['Común', 'Especial', 'Plata', 'Oro', 'Platino'];
+const CATEGORIAS_CLIENTE = ['comun', 'especial', 'plata', 'oro', 'platino'];
 const SI_NO = ['Sí', 'No'];
 const TABS = [
   { key: 'pendientes' as const, label: 'PENDIENTES' },
@@ -560,7 +560,11 @@ export default function AdminPanel() {
                       <Text style={s.emptyText}>Sin subastas</Text>
                     </View>
                   ) : subastasLista.map(sub => {
-                    const abierta = sub.estado?.toLowerCase() === 'abierta';
+                    const estRaw = sub.estado || '';
+                    const est = estRaw.toLowerCase();
+                    const badgeStyle = (est === 'abierta' || est === 'en_vivo' || est === 'cerrada' || est === 'proximamente') ? 'badgePending' : 'badgeRejected';
+                    const badgeText = (est === 'abierta' || est === 'en_vivo') ? 'ABIERTA' : (est === 'cerrada' || est === 'proximamente') ? 'PRÓXIMA' : 'FINALIZADA';
+                    const badgeTextStyle = badgeStyle === 'badgePending' ? 'badgePendingText' : 'badgeRejectedText';
                     return (
                       <View key={String(sub.id)} style={s.card}>
                         <View style={s.cardHeader}>
@@ -568,22 +572,18 @@ export default function AdminPanel() {
                             <Text style={s.cardName}>{sub.nombre || `Subasta #${sub.id}`}</Text>
                             {sub.fecha ? <Text style={s.cardMeta}>{sub.fecha}{sub.hora ? ` · ${sub.hora}` : ''}</Text> : null}
                           </View>
-                          <View style={abierta ? s.badgePending : s.badgeRejected}>
-                            <Text style={abierta ? s.badgePendingText : s.badgeRejectedText}>{abierta ? 'ABIERTA' : 'CERRADA'}</Text>
+                          <View style={s[badgeStyle]}>
+                            <Text style={s[badgeTextStyle]}>{badgeText}</Text>
                           </View>
                         </View>
-                        {abierta && (
-                          <>
-                            <View style={s.cardDivider} />
-                            <TouchableOpacity
-                              style={[s.btnSecondary, cerrandoSubasta === String(sub.id) && s.btnDisabled]}
-                              onPress={() => handleCerrarSubasta(sub.id)}
-                              disabled={cerrandoSubasta === String(sub.id)}
-                            >
-                              <Text style={s.btnSecondaryText}>{cerrandoSubasta === String(sub.id) ? 'CERRANDO...' : 'CERRAR SUBASTA'}</Text>
-                            </TouchableOpacity>
-                          </>
-                        )}
+                        <View style={s.cardDivider} />
+                        <TouchableOpacity
+                          style={[s.btnSecondary, cerrandoSubasta === String(sub.id) && s.btnDisabled]}
+                          onPress={() => handleCerrarSubasta(sub.id)}
+                          disabled={cerrandoSubasta === String(sub.id)}
+                        >
+                          <Text style={s.btnSecondaryText}>{cerrandoSubasta === String(sub.id) ? 'CERRANDO...' : 'CERRAR SUBASTA'}</Text>
+                        </TouchableOpacity>
                       </View>
                     );
                   })}

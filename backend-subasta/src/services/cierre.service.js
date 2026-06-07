@@ -176,9 +176,6 @@ const ejecutarCierreSubasta = async (subastaId) => {
 
     if (err) throw new AppError('Error al obtener subasta: ' + err.message, 500);
     if (!subasta) throw new AppError('Subasta no encontrada', 404);
-    if (subasta.estado === 'cerrada') {
-        throw new AppError('La subasta aún no comenzó, no se puede cerrar', 400);
-    }
     if (subasta.estado === 'finalizada') {
         throw new AppError('La subasta ya está finalizada', 400);
     }

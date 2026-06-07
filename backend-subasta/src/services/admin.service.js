@@ -8,6 +8,14 @@ const SI_NO = ['si', 'no'];
 
 const normalizeLower = (value) => String(value || '').toLowerCase().trim();
 
+const normalizarCategoria = (value) => {
+    return String(value || '')
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+};
+
 const parseIdNumber = (value) => {
     const numeric = Number(value);
     return Number.isNaN(numeric) ? null : numeric;
@@ -20,7 +28,7 @@ const evaluarCliente = async ({ id, payload }) => {
     }
 
     const admitido = normalizeLower(payload?.admitido);
-    const categoria = payload?.categoria ? normalizeLower(payload.categoria) : null;
+    const categoria = payload?.categoria ? normalizarCategoria(payload.categoria) : null;
 
     if (!SI_NO.includes(admitido)) {
         const err = new AppError('Datos inválidos', 400);
@@ -368,7 +376,7 @@ const crearSubasta = async ({ payload }) => {
                 capacidadasistentes: capacidadasistentes ?? null,
                 tienedeposito: tieneDeposito || null,
                 seguridadpropia: seguridad || null,
-                categoria: String(categoria).trim(),
+                categoria: normalizarCategoria(categoria),
                 tematica,
                 estado: fechaHora.getTime() > Date.now() ? 'cerrada' : 'abierta',
                 imagen: imagen || null
