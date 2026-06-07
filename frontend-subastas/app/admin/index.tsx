@@ -15,7 +15,7 @@ import { SkeletonList } from '@/src/components/Skeleton';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 
-const CATEGORIAS_CLIENTE = ['Común', 'Especial', 'Plata', 'Oro', 'Platino'];
+const CATEGORIAS_CLIENTE = ['comun', 'especial', 'plata', 'oro', 'platino'];
 const SI_NO = ['Sí', 'No'];
 const TABS = [
   { key: 'pendientes' as const, label: 'PENDIENTES' },
