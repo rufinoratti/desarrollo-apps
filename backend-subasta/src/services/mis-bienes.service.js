@@ -311,8 +311,8 @@ const crearProducto = async ({ authUser, payload, files }) => {
 
     await ensureDuenioSupabase(clienteId);
 
-    const descripcioncatalogo = String(payload?.descripcioncatalogo || '').trim().slice(0, 300);
-    const descripcioncompleta = String(payload?.descripcioncompleta || '').trim().slice(0, 300);
+    const descripcioncatalogo = String(payload?.descripcioncatalogo || '').trim().slice(0, 1000);
+    const descripcioncompleta = String(payload?.descripcioncompleta || '').trim().slice(0, 1000);
     const revisorId = parseNumber(payload?.revisor);
     const precioSugerido = parseNumber(payload?.preciosugerido);
 
