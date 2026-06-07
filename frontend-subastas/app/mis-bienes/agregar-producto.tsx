@@ -214,6 +214,7 @@ export default function AgregarProductoScreen() {
             onChangeText={setDescripcion}
             placeholder="Detalles del producto"
             multiline
+            maxLength={300}
           />
           <Input
             label="Precio sugerido"
