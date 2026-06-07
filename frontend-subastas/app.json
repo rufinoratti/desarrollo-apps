@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "frontend-subastas",
-    "slug": "frontend-subastas",
+    "name": "Rematix",
+    "slug": "rematix",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontendsubastas",
+    "scheme": "rematix",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
