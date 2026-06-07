@@ -331,9 +331,7 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const seguroNroPoliza = String(payload?.seguro_nropoliza || '').trim();
     const seguroCompania = String(payload?.seguro_compania || '').trim();
     const seguroImporte = parseNumber(payload?.seguro_importe);
-    const seguroPolizaCombinada = ['si', 'no'].includes(String(payload?.seguro_polizacombinada || '').toLowerCase())
-        ? String(payload.seguro_polizacombinada).toLowerCase()
-        : 'no';
+    const seguroPolizaCombinada = 'no';
 
     if (!descripcioncatalogo || !descripcioncompleta || !revisorId || !precioSugerido) {
         const err = new AppError('Datos inválidos', 400);
