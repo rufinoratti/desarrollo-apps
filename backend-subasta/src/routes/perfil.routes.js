@@ -12,7 +12,7 @@ const { createUploader, multerErrorHandler } = require('../middlewares/upload');
  * para no acumular objetos huérfanos.
  */
 const upload = createUploader({
-    maxSize: 5 * 1024 * 1024,
+    maxSize: 10 * 1024 * 1024,
     mimeTypes: ['jpeg', 'jpg', 'png', 'gif', 'webp']
 });
 
