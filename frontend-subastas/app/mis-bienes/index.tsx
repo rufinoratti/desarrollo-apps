@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   modalClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '600', color: '#111' },
+  modalTitle: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '600', color: '#000000' },
   modalScroll: { flex: 1 },
 
   galleryWrap: { width: '100%', height: 320, position: 'relative', backgroundColor: '#F5F5F5' },

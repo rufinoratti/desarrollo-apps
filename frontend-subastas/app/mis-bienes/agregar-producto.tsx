@@ -35,7 +35,6 @@ export default function AgregarProductoScreen() {
   const [nroPoliza, setNroPoliza] = useState('');
   const [compania, setCompania] = useState('');
   const [importeSeguro, setImporteSeguro] = useState('');
-  const [polizaCombinada, setPolizaCombinada] = useState<'si' | 'no'>('no');
 
   const fetchOpciones = useCallback(async () => {
     if (!token) return;
@@ -112,7 +111,6 @@ export default function AgregarProductoScreen() {
       formData.append('seguro_nropoliza', nroPoliza.trim());
       formData.append('seguro_compania', compania.trim());
       formData.append('seguro_importe', importeSeguro.trim());
-      formData.append('seguro_polizacombinada', polizaCombinada);
 
       imagenes.forEach((img) => {
         const file = {
@@ -264,29 +262,6 @@ export default function AgregarProductoScreen() {
             placeholder="Ej: 500000"
             keyboardType="numeric"
           />
-
-          {/* Toggle póliza combinada */}
-          <Text style={styles.toggleLabel}>PÓLIZA COMBINADA</Text>
-          <View style={styles.toggleRow}>
-            <TouchableOpacity
-              style={[styles.toggleBtn, polizaCombinada === 'no' && styles.toggleBtnActive]}
-              onPress={() => setPolizaCombinada('no')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.toggleBtnText, polizaCombinada === 'no' && styles.toggleBtnTextActive]}>
-                NO
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.toggleBtn, polizaCombinada === 'si' && styles.toggleBtnActive]}
-              onPress={() => setPolizaCombinada('si')}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.toggleBtnText, polizaCombinada === 'si' && styles.toggleBtnTextActive]}>
-                SÍ
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         <Button title="PUBLICAR PRODUCTO" onPress={handleSubmit} loading={saving} />
@@ -321,20 +296,4 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   imageAddText: { marginTop: 4, fontSize: 10, color: '#666' },
-
-  // Toggle póliza combinada
-  toggleLabel: {
-    fontSize: 10, fontWeight: 'bold', color: '#333',
-    letterSpacing: 1, marginBottom: 10,
-  },
-  toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
-  toggleBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 8,
-    borderWidth: 1, borderColor: '#DDD',
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F8F9FA',
-  },
-  toggleBtnActive: { backgroundColor: '#111', borderColor: '#111' },
-  toggleBtnText: { fontSize: 13, fontWeight: '700', color: '#999' },
-  toggleBtnTextActive: { color: '#FFF' },
 });
