@@ -18,6 +18,49 @@ const request = require('supertest');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const Module = require('node:module');
+
+/**
+ * Mock programable de Supabase Storage. Como este test corre en modo
+ * local (sin credenciales reales de Supabase), necesitamos interceptar
+ * el módulo de storage para simular uploads. Devuelve URLs falsas con
+ * el formato esperado y registra las llamadas para aserciones.
+ */
+const storageCalls = { upload: [], remove: [], getPublicUrl: [] };
+
+const storageMock = {
+    BUCKET: 'rematix-media',
+    isStorageConfigured: () => true,
+    uploadBuffer: async ({ folder, fieldname, buffer, mimetype, originalname }) => {
+        const fakePath = `${folder}/${fieldname || 'file'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+        const url = `https://test.supabase.co/storage/v1/object/public/rematix-media/${fakePath}`;
+        storageCalls.upload.push({ folder, fieldname, bufferLength: buffer?.length, mimetype, url });
+        return url;
+    },
+    getPublicUrl: (path) => {
+        const url = `https://test.supabase.co/storage/v1/object/public/rematix-media/${path}`;
+        storageCalls.getPublicUrl.push({ path, url });
+        return url;
+    },
+    remove: async (urlOrPath) => {
+        storageCalls.remove.push({ urlOrPath });
+    },
+    extractPathFromUrl: (url) => {
+        if (!url) return null;
+        const marker = '/storage/v1/object/public/rematix-media/';
+        const idx = url.indexOf(marker);
+        return idx === -1 ? null : url.substring(idx + marker.length);
+    },
+    getFolderFromPath: (p) => p ? p.split('/')[0] : null
+};
+
+const originalRequire = Module.prototype.require;
+Module.prototype.require = function patched(id) {
+    if (id.endsWith('/config/storage') || id === '../config/storage') {
+        return storageMock;
+    }
+    return originalRequire.apply(this, arguments);
+};
 
 const app = require('../src/app');
 

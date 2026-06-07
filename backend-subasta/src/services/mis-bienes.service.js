@@ -1,5 +1,6 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
+const storage = require('../config/storage');
 const { store, nextId } = require('./data.store');
 
 const normalizeLower = (value) => String(value || '').toLowerCase().trim();
@@ -298,27 +299,14 @@ const listarMisBienes = async (authUser) => {
 };
 
 
-const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
-    const clienteId = isConfigured ? await resolveClienteIdSupabase(authUser) : authUser?.id;
-    if (!clienteId) {
-        throw new AppError('No autenticado', 401);
+const crearProducto = async ({ authUser, payload, files }) => {
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
     }
 
-    if (!isConfigured) {
-        const productos = store.productos || [];
-        const id = nextId('p', 'producto');
-        const nuevo = {
-            id,
-            descripcioncatalogo: payload.descripcioncatalogo,
-            descripcioncompleta: payload.descripcioncompleta,
-            disponible: null,
-            revisor: payload.revisor,
-            duenio: clienteId,
-            preciosugerido: parseNumber(payload?.preciosugerido) || null
-        };
-        productos.push(nuevo);
-        store.productos = productos;
-        return { mensaje: 'Producto creado', producto_id: id };
+    const clienteId = await resolveClienteIdSupabase(authUser);
+    if (!clienteId) {
+        throw new AppError('No autenticado', 401);
     }
 
     await ensureDuenioSupabase(clienteId);
@@ -380,8 +368,6 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     }
 
     // 2. Crear el seguro primero
-    // Usamos .select().single() para que Supabase nos devuelva la fila insertada;
-    // si la policy RLS rechaza en silencio, data será null y lo detectamos acá.
     const { data: seguroCreado, error: seguroError } = await supabase
         .from('seguros')
         .insert({
@@ -440,11 +426,24 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
     const productoId = producto?.identificador;
     console.log(`[mis-bienes.crearProducto] producto creado id=${productoId} seguro=${producto?.seguro}`);
 
-    // 4. Subir las fotos
+    // 4. Subir las fotos a Supabase Storage (secuencial para tracking correcto
+    //    en caso de rollback; hasta 6 fotos, performance aceptable para MVP).
+    const urlsSubidas = [];
     try {
-        const fotosPayload = files.map((file) => ({
+        for (const file of files) {
+            const url = await storage.uploadBuffer({
+                folder: 'productos',
+                fieldname: file.fieldname,
+                buffer: file.buffer,
+                mimetype: file.mimetype,
+                originalname: file.originalname
+            });
+            urlsSubidas.push(url);
+        }
+
+        const fotosPayload = urlsSubidas.map((url) => ({
             producto: productoId,
-            foto_url: `${baseUrl}/uploads/${file.filename}`
+            foto_url: url
         }));
 
         const { error: fotosError } = await supabase
@@ -456,6 +455,11 @@ const crearProducto = async ({ authUser, payload, files, baseUrl }) => {
         }
     } catch (error) {
         console.error('[mis-bienes.crearProducto] Error guardando fotos, haciendo rollback completo:', error);
+        // Rollback de Storage: borrar las URLs que se subieron antes del fallo
+        if (urlsSubidas.length > 0) {
+            await Promise.all(urlsSubidas.map((u) => storage.remove(u).catch(() => {})));
+        }
+        // Rollback de BD: borrar registros en orden inverso al insert
         await supabase.from('fotos').delete().eq('producto', productoId);
         await supabase.from('productos').delete().eq('identificador', productoId);
         await supabase.from('seguros').delete().eq('nropoliza', seguroNroPoliza);

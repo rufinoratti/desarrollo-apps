@@ -31,6 +31,7 @@ const jwt = require('jsonwebtoken');
 const { store, nextId } = require('./data.store');
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
+const storage = require('../config/storage');
 
 // ============================================================
 // CONFIGURACIÓN
@@ -417,16 +418,25 @@ const paso2Registro = async (payload) => {
 
 /**
  * Paso 3 del registro: recibe las imágenes del DNI (frente y dorso)
- * y las almacena para validación de identidad (KYC).
+ * y la foto de perfil opcional. Las sube a Supabase Storage y guarda
+ * las URLs resultantes en el registro temporal.
+ *
+ * Si algún upload falla a mitad de camino, hace rollback de los archivos
+ * ya subidos a Storage para no dejar archivos huérfanos.
  *
  * @param {Object} payload
  * @param {string} payload.registro_id
- * @param {Object} archivos - Objeto retornado por multer con los archivos subidos
+ * @param {Object} archivos - Objeto retornado por multer con los archivos
  * @returns {Promise<{mensaje:string, estado_validacion:string}>}
  * @throws {AppError} 400 si las imágenes son inválidas o faltan
  * @throws {AppError} 404 si el registro no existe
+ * @throws {AppError} 500 si falla la subida a Supabase Storage
  */
 const paso3Registro = async (payload, archivos) => {
+    if (!storage.isStorageConfigured()) {
+        throw new AppError('Supabase Storage no está configurado. Revisá SUPABASE_SERVICE_ROLE_KEY y SUPABASE_BUCKET_MEDIA en .env', 503);
+    }
+
     const { registro_id } = payload;
 
     if (!registro_id) {
@@ -448,17 +458,54 @@ const paso3Registro = async (payload, archivos) => {
         throw new AppError('Se requieren las imágenes del DNI (frente y dorso)', 400);
     }
 
-    // BUG-02 fix: el filtro de multer ya restringe a imagen, pero validamos mimetype acá también
     if (!dni_frente.mimetype?.startsWith('image/') || !dni_dorso.mimetype?.startsWith('image/')) {
         throw new AppError('Formato de archivo inválido. Solo se aceptan imágenes JPG o PNG', 400);
     }
-
-    // Actualizar registro temporal
-    registro.dni_frente = dni_frente.filename;
-    registro.dni_dorso = dni_dorso.filename;
-    if (foto_perfil) {
-        registro.foto_perfil = foto_perfil.filename;
+    if (foto_perfil && !foto_perfil.mimetype?.startsWith('image/')) {
+        throw new AppError('Formato de archivo de foto de perfil inválido', 400);
     }
+
+    // Subir buffers a Supabase Storage. Usamos Promise.all para paralelizar;
+    // si alguno falla, hacemos rollback de los que se subieron.
+    const uploads = [
+        storage.uploadBuffer({
+            folder: 'dni',
+            fieldname: dni_frente.fieldname,
+            buffer: dni_frente.buffer,
+            mimetype: dni_frente.mimetype,
+            originalname: dni_frente.originalname
+        }),
+        storage.uploadBuffer({
+            folder: 'dni',
+            fieldname: dni_dorso.fieldname,
+            buffer: dni_dorso.buffer,
+            mimetype: dni_dorso.mimetype,
+            originalname: dni_dorso.originalname
+        })
+    ];
+    if (foto_perfil) {
+        uploads.push(storage.uploadBuffer({
+            folder: 'perfiles',
+            fieldname: foto_perfil.fieldname,
+            buffer: foto_perfil.buffer,
+            mimetype: foto_perfil.mimetype,
+            originalname: foto_perfil.originalname
+        }));
+    }
+
+    let urls = [];
+    try {
+        urls = await Promise.all(uploads);
+    } catch (uploadErr) {
+        // Rollback: borrar lo que se haya subido antes de fallar
+        await Promise.all(urls.map((u) => storage.remove(u).catch(() => {})));
+        throw new AppError(`Error al subir documentos a Storage: ${uploadErr.message}`, 500);
+    }
+
+    registro.dni_frente = urls[0];
+    registro.dni_dorso = urls[1];
+    if (foto_perfil) registro.foto_perfil = urls[2];
+
     registro.estado = 'paso3_completo';
     registro.estado_validacion = 'EN_REVISION';
 

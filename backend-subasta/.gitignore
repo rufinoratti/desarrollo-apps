@@ -6,8 +6,9 @@ npm-debug.*
 # Tests coverage (jest --coverage)
 coverage/
 
-# === NOTA PARA HOSPEDAJE (Render/Railway/Fly.io) ===
-# El filesystem es efímero. Cuando migres uploads a Supabase Storage o S3,
-# ignorá esta carpeta y remové del tracking con:
-#   git rm -r --cached backend-subasta/uploads
-# uploads/
+# Uploads legacy (disk storage). Las imágenes ya no se guardan acá:
+# ahora viven en Supabase Storage (bucket SUPABASE_BUCKET_MEDIA).
+# Esta carpeta queda ignorada para que archivos residuales no se
+# versionen. Se puede hacer `git rm -r --cached backend-subasta/uploads`
+# para limpiar el tracking histórico.
+uploads/
