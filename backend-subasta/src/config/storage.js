@@ -1,5 +1,6 @@
 const path = require('path');
 const { supabaseAdmin, isAdminConfigured } = require('./supabase');
+const { resizeImage } = require('../utils/image');
 
 // ============================================================
 // WRAPPER DE SUPABASE STORAGE
@@ -53,11 +54,15 @@ async function uploadBuffer({ folder, fieldname, buffer, mimetype, originalname 
         throw new Error('[storage.uploadBuffer] `folder` y `fieldname` son requeridos');
     }
 
+    const finalBuffer = mimetype?.startsWith('image/')
+        ? await resizeImage(buffer)
+        : buffer;
+
     const objectPath = buildObjectPath(folder, fieldname, originalname);
 
     const { error } = await supabaseAdmin.storage
         .from(BUCKET)
-        .upload(objectPath, buffer, {
+        .upload(objectPath, finalBuffer, {
             contentType: mimetype,
             cacheControl: '3600',
             upsert: false
