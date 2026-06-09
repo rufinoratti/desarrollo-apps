@@ -163,16 +163,27 @@ const evaluarProducto = async ({ id, payload }) => {
             resolvedCatalogoId = catalogoRow.identificador;
         }
 
+        const updateFields = {
+            revisor,
+            descripcioncatalogo,
+            seguro
+        };
+
+        if (disponible === 'si') {
+            updateFields.preciobase_asignado = preciobase;
+            updateFields.comision_asignada = comision;
+            updateFields.subasta_asignada = subastaId;
+            updateFields.confirmacion_duenio = 'pendiente';
+        } else {
+            updateFields.disponible = 'no';
+            updateFields.confirmacion_duenio = 'rechazado';
+        }
+
         const { data, error } = await supabase
             .from('productos')
-            .update({
-                disponible,
-                revisor,
-                descripcioncatalogo,
-                seguro
-            })
+            .update(updateFields)
             .eq('identificador', productoId)
-            .select('identificador, disponible, revisor, descripcioncatalogo, seguro')
+            .select('identificador, disponible, revisor, descripcioncatalogo, seguro, confirmacion_duenio, preciobase_asignado, comision_asignada, subasta_asignada')
             .maybeSingle();
 
         if (error) {
@@ -183,46 +194,10 @@ const evaluarProducto = async ({ id, payload }) => {
             throw new AppError('Producto no encontrado', 404);
         }
 
-        if (disponible === 'si') {
-            const { data: existingItem } = await supabase
-                .from('itemscatalogo')
-                .select('identificador')
-                .eq('producto', productoId)
-                .maybeSingle();
-
-            if (existingItem) {
-                const { error: updateItemError } = await supabase
-                    .from('itemscatalogo')
-                    .update({
-                        catalogo: resolvedCatalogoId,
-                        preciobase,
-                        comision,
-                        subastado: 'no'
-                    })
-                    .eq('identificador', existingItem.identificador);
-
-                if (updateItemError) {
-                    throw new AppError('Error al actualizar ítem de catálogo: ' + updateItemError.message, 500);
-                }
-            } else {
-                const { error: insertItemError } = await supabase
-                    .from('itemscatalogo')
-                    .insert({
-                        catalogo: resolvedCatalogoId,
-                        producto: productoId,
-                        preciobase,
-                        comision,
-                        subastado: 'no'
-                    });
-
-                if (insertItemError) {
-                    throw new AppError('Error al crear ítem de catálogo: ' + insertItemError.message, 500);
-                }
-            }
-        }
-
         return {
-            mensaje: 'Estado del producto actualizado',
+            mensaje: disponible === 'si'
+                ? 'Producto evaluado exitosamente. Pendiente de confirmación del dueño.'
+                : 'Producto rechazado',
             producto_id: String(data.identificador),
             disponible: data.disponible,
             revisor: data.revisor,
@@ -230,7 +205,8 @@ const evaluarProducto = async ({ id, payload }) => {
             seguro: data.seguro,
             preciobase: disponible === 'si' ? preciobase : null,
             comision: disponible === 'si' ? comision : null,
-            subasta_id: disponible === 'si' ? subastaId : null
+            subasta_id: disponible === 'si' ? subastaId : null,
+            confirmacion_duenio: data.confirmacion_duenio
         };
     }
 
@@ -240,46 +216,24 @@ const evaluarProducto = async ({ id, payload }) => {
         throw new AppError('Producto no encontrado', 404);
     }
 
-    producto.disponible = disponible;
     producto.revisor = revisor;
     producto.descripcioncatalogo = descripcioncatalogo;
     producto.seguro = seguro;
 
     if (disponible === 'si') {
-        const catalogos = store.catalogos || [];
-        const catalogo = catalogos.find((c) => Number(c.subasta) === Number(subastaId));
-        if (!catalogo) {
-            const err = new AppError('La subasta no tiene un catálogo asociado', 400);
-            err.codigo = 'DATOS_INVALIDOS';
-            throw err;
-        }
-
-        const items = store.itemscatalogo || [];
-        const existingIdx = items.findIndex((i) => String(i.producto) === String(productoId));
-        if (existingIdx >= 0) {
-            items[existingIdx] = {
-                ...items[existingIdx],
-                catalogo: catalogo.id,
-                preciobase,
-                comision,
-                subastado: 'no'
-            };
-        } else {
-            const itemId = nextId('i', 'item');
-            items.push({
-                id: itemId,
-                catalogo: catalogo.id,
-                producto: productoId,
-                preciobase,
-                comision,
-                subastado: 'no'
-            });
-        }
-        store.itemscatalogo = items;
+        producto.preciobase_asignado = preciobase;
+        producto.comision_asignada = comision;
+        producto.subasta_asignada = subastaId;
+        producto.confirmacion_duenio = 'pendiente';
+    } else {
+        producto.disponible = 'no';
+        producto.confirmacion_duenio = 'rechazado';
     }
 
     return {
-        mensaje: 'Estado del producto actualizado',
+        mensaje: disponible === 'si'
+            ? 'Producto evaluado exitosamente. Pendiente de confirmación del dueño.'
+            : 'Producto rechazado',
         producto_id: String(producto.id),
         disponible: producto.disponible,
         revisor: producto.revisor,
@@ -287,7 +241,8 @@ const evaluarProducto = async ({ id, payload }) => {
         seguro: producto.seguro,
         preciobase: disponible === 'si' ? preciobase : null,
         comision: disponible === 'si' ? comision : null,
-        subasta_id: disponible === 'si' ? subastaId : null
+        subasta_id: disponible === 'si' ? subastaId : null,
+        confirmacion_duenio: producto.confirmacion_duenio
     };
 };
 
@@ -519,8 +474,9 @@ const listarProductosPendientes = async () => {
     if (isConfigured) {
         const { data, error } = await supabase
             .from('productos')
-            .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio, preciosugerido')
+            .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio, preciosugerido, confirmacion_duenio, preciobase_asignado, comision_asignada, subasta_asignada')
             .is('disponible', null)
+            .is('confirmacion_duenio', null)
             .order('identificador', { ascending: true });
 
         if (error) {
