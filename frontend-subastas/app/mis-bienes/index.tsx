@@ -126,13 +126,20 @@ export default function MisBienesScreen() {
                 throw new Error(errData.error || errData.mensaje || 'No se pudo retirar el artículo');
               }
 
+              const data = await res.json().catch(() => ({}));
+
               setSelectedProducto(null);
-              setRetiredIds((prev) => [...prev, productoId]);
-              setProductos((prev) =>
-                prev.map((p) =>
-                  p.producto_id === productoId ? { ...p, status: 'RECHAZADO' as const } : p
-                )
-              );
+
+              if (data.eliminado) {
+                setProductos((prev) => prev.filter((p) => p.producto_id !== productoId));
+              } else {
+                setRetiredIds((prev) => [...prev, productoId]);
+                setProductos((prev) =>
+                  prev.map((p) =>
+                    p.producto_id === productoId ? { ...p, status: 'RECHAZADO' as const } : p
+                  )
+                );
+              }
             } catch (error) {
               const message = error instanceof Error ? error.message : 'No se pudo retirar el artículo';
               Alert.alert('Error', message);

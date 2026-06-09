@@ -636,52 +636,38 @@ const retirarProducto = async ({ authUser, productoId }) => {
 
     if (!isConfigured) {
         const productos = store.productos || [];
-        const producto = productos.find((item) => String(item.id) === String(normalizedProductoId));
-        if (!producto) {
-            throw new AppError('Artículo no encontrado', 404);
-        }
-        if (String(producto.duenio) !== String(clienteId)) {
-            throw new AppError('No es el propietario del artículo', 403);
-        }
+        const idx = productos.findIndex((item) => String(item.id) === String(normalizedProductoId));
+        if (idx === -1) throw new AppError('Artículo no encontrado', 404);
+        if (String(productos[idx].duenio) !== String(clienteId)) throw new AppError('No es el propietario del artículo', 403);
 
         const bids = (store.bids || []).filter((bid) => String(bid.item_id) === String(normalizedProductoId));
-        if (bids.length) {
-            throw new AppError('No se puede retirar (tiene pujas activas)', 400);
-        }
+        if (bids.length) throw new AppError('No se puede retirar (tiene pujas activas)', 400);
 
-        producto.disponible = 'no';
+        productos.splice(idx, 1);
         store.productos = productos;
-        return { mensaje: 'Artículo retirado de la subasta' };
+        return { mensaje: 'Producto eliminado permanentemente', eliminado: true };
     }
 
     await ensureDuenioSupabase(clienteId);
 
     const { data: producto, error: productoError } = await supabase
         .from('productos')
-        .select('identificador, duenio')
+        .select('identificador, duenio, seguro')
         .eq('identificador', normalizedProductoId)
         .maybeSingle();
 
-    if (productoError) {
-        throw new AppError('Error al obtener producto: ' + productoError.message, 500);
-    }
+    if (productoError) throw new AppError('Error al obtener producto: ' + productoError.message, 500);
+    if (!producto) throw new AppError('Artículo no encontrado', 404);
+    if (String(producto.duenio) !== String(clienteId)) throw new AppError('No es el propietario del artículo', 403);
 
-    if (!producto) {
-        throw new AppError('Artículo no encontrado', 404);
-    }
-
-    if (String(producto.duenio) !== String(clienteId)) {
-        throw new AppError('No es el propietario del artículo', 403);
-    }
+    const seguroId = producto.seguro;
 
     const { data: itemsCatalogo, error: itemsError } = await supabase
         .from('itemscatalogo')
         .select('identificador')
         .eq('producto', normalizedProductoId);
 
-    if (itemsError) {
-        throw new AppError('Error al obtener itemscatalogo: ' + itemsError.message, 500);
-    }
+    if (itemsError) throw new AppError('Error al obtener itemscatalogo: ' + itemsError.message, 500);
 
     const itemIds = (itemsCatalogo || []).map((item) => item.identificador).filter(Boolean);
 
@@ -692,34 +678,32 @@ const retirarProducto = async ({ authUser, productoId }) => {
             .in('item', itemIds)
             .limit(1);
 
-        if (bidsError) {
-            throw new AppError('Error al validar pujas: ' + bidsError.message, 500);
-        }
+        if (bidsError) throw new AppError('Error al validar pujas: ' + bidsError.message, 500);
+        if ((bids || []).length) throw new AppError('No se puede retirar (tiene pujas activas)', 400);
 
-        if ((bids || []).length) {
-            throw new AppError('No se puede retirar (tiene pujas activas)', 400);
-        }
-
-        const { error: deleteItemError } = await supabase
-            .from('itemscatalogo')
-            .delete()
-            .eq('producto', normalizedProductoId);
-
-        if (deleteItemError) {
-            throw new AppError('Error al retirar artículo: ' + deleteItemError.message, 500);
-        }
+        await supabase.from('itemscatalogo').delete().eq('producto', normalizedProductoId);
     }
 
-    const { error: updateError } = await supabase
-        .from('productos')
-        .update({ disponible: 'no' })
-        .eq('identificador', normalizedProductoId);
+    // Eliminar fotos de Storage + BD
+    const { data: fotosExistentes } = await supabase
+        .from('fotos')
+        .select('foto_url')
+        .eq('producto', normalizedProductoId);
 
-    if (updateError) {
-        throw new AppError('Error al retirar artículo: ' + updateError.message, 500);
+    if (fotosExistentes?.length) {
+        await Promise.all(fotosExistentes.map((f) => storage.remove(f.foto_url).catch(() => {})));
+    }
+    await supabase.from('fotos').delete().eq('producto', normalizedProductoId);
+
+    // Eliminar producto
+    await supabase.from('productos').delete().eq('identificador', normalizedProductoId);
+
+    // Eliminar seguro asociado
+    if (seguroId) {
+        await supabase.from('seguros').delete().eq('nropoliza', seguroId).catch(() => {});
     }
 
-    return { mensaje: 'Artículo retirado de la subasta' };
+    return { mensaje: 'Producto eliminado permanentemente', eliminado: true };
 };
 
 module.exports = {
