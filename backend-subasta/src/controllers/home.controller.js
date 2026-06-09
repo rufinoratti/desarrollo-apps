@@ -44,11 +44,10 @@ const obtenerCategorias = async (req, res, next) => {
  */
 const obtenerSubastas = async (req, res, next) => {
     try {
-        // CAMBIO PRINCIPAL: Se extrae 'tematica' del request
         const { tematica, estado, limite, pagina } = req.query;
 
         const result = await homeService.obtenerSubastas({
-            tematica, // Pasamos 'tematica' al service
+            tematica,
             estado,
             limite,
             pagina

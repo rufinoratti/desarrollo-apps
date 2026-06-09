@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { rankOf } from '@/src/utils/rankCategory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
 import { Skeleton } from '@/src/components/Skeleton';
@@ -29,6 +30,8 @@ interface CatalogoSubastaInfo {
   fecha_fin?: string | null;
   ubicacion?: string | null;
   cantidad_articulos?: number | null;
+  imagen_portada?: string | null;
+  nivel_acceso?: string | null;
 }
 
 function getDisplayStatus(item: CatalogoSubastaInfo): string {
@@ -137,6 +140,54 @@ interface EstadoPujas {
   es_ganadora?: boolean;
 }
 
+function LockScreen({ subastaInfo, categoriaRequerida }: { subastaInfo: CatalogoSubastaInfo; categoriaRequerida: string }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scaleAnim, { toValue: 1.12, duration: 1200, useNativeDriver: true }),
+          Animated.timing(rotateAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scaleAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+          Animated.timing(rotateAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+        ]),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [scaleAnim, rotateAnim]);
+
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '8deg'],
+  });
+
+  return (
+    <View style={styles.lockContainer}>
+      <Image
+        source={{ uri: subastaInfo.imagen_portada || undefined }}
+        style={styles.lockImage}
+        blurRadius={12}
+      />
+      <View style={styles.lockOverlay}>
+        <Animated.View style={{ transform: [{ scale: scaleAnim }, { rotate }] }}>
+          <Ionicons name="lock-closed" size={64} color="#fff" />
+        </Animated.View>
+        <Text style={styles.lockTitle}>ACCESO RESTRINGIDO</Text>
+        <Text style={styles.lockSubtitle}>
+          Necesitas ser categoría{' '}
+          <Text style={styles.lockCategoria}>{categoriaRequerida.toUpperCase()}</Text>{' '}
+          para acceder a esta subasta
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function CatalogoScreen() {
   const { id, titulo } = useLocalSearchParams<{ id: string; titulo: string }>();
   const { token, removeToken, nivel } = useAuth();
@@ -199,46 +250,6 @@ export default function CatalogoScreen() {
   }, [id, ordenSeleccionado, token]);
 
   useEffect(() => { if (token) fetchCatalogo(); }, [token, fetchCatalogo]);
-
-  // Helper para mapear niveles a ranking numérico
-  const rankOf = (lvl?: string | number) => {
-    if (!lvl && lvl !== 0) return 1;
-    const s = String(lvl)
-      .trim()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase();
-    const digits = s.match(/\d+/);
-    if (digits?.[0]) {
-      const num = Number(digits[0]);
-      if (num >= 1 && num <= 5) return num;
-    }
-    if (s.includes('platino') || s.includes('platinum')) return 5;
-    if (s.includes('oro')) return 4;
-    if (s.includes('plata')) return 3;
-    if (s.includes('especial')) return 2;
-    if (s.includes('comun') || s.includes('base')) return 1;
-    switch (s) {
-      case 'base':
-      case 'comun':
-      case '1':
-        return 1;
-      case 'especial':
-      case '2':
-        return 2;
-      case 'plata':
-      case '3':
-        return 3;
-      case 'oro':
-      case '4':
-        return 4;
-      case 'platino':
-      case '5':
-        return 5;
-      default:
-        return 1;
-    }
-  };
 
   const nivelUsuario = rankOf(nivel || 'base');
   const rawReqSubasta = (subastaInfo as any)?.nivel_acceso ?? (subastaInfo as any)?.nivel ?? '';
@@ -473,45 +484,49 @@ export default function CatalogoScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, subastaBloqueada && { borderBottomWidth: 0 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerBack}>
-          <Ionicons name="chevron-back" size={24} color="#000" />
+          <Ionicons name="chevron-back" size={24} color={subastaBloqueada ? '#fff' : '#000'} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>REMATIX</Text>
-        <TouchableOpacity onPress={handleToggleBusqueda} style={styles.headerAction}>
-          <Ionicons name={busquedaVisible ? 'close' : 'search'} size={22} color="#000" />
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, subastaBloqueada && { color: '#fff' }]}>REMATIX</Text>
+        <View style={styles.headerAction} />
       </View>
 
-      {busquedaVisible && (
-        <View style={styles.busquedaBar}>
-          <TextInput
-            ref={inputRef}
-            style={styles.busquedaInput}
-            placeholder="Buscar artículos..."
-            placeholderTextColor="#999"
-            value={textoBusqueda}
-            onChangeText={setTextoBusqueda}
-            returnKeyType="search"
-            onSubmitEditing={handleSearch}
-          />
-          {textoBusqueda.length > 0 && (
-            <TouchableOpacity onPress={() => { setTextoBusqueda(''); fetchCatalogo(); }}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
+      {subastaBloqueada && subastaInfo ? (
+        <LockScreen subastaInfo={subastaInfo} categoriaRequerida={rawReqSubasta} />
+      ) : (
+        <>
+          {busquedaVisible && (
+            <View style={styles.busquedaBar}>
+              <TextInput
+                ref={inputRef}
+                style={styles.busquedaInput}
+                placeholder="Buscar artículos..."
+                placeholderTextColor="#999"
+                value={textoBusqueda}
+                onChangeText={setTextoBusqueda}
+                returnKeyType="search"
+                onSubmitEditing={handleSearch}
+              />
+              {textoBusqueda.length > 0 && (
+                <TouchableOpacity onPress={() => { setTextoBusqueda(''); fetchCatalogo(); }}>
+                  <Ionicons name="close-circle" size={20} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
           )}
-        </View>
+
+          {subastaInfo && <CatalogoHeader subastaInfo={subastaInfo} articulosCount={articulos.length} />}
+
+          <FlatList
+            data={articulos}
+            keyExtractor={item => item.id}
+            renderItem={renderArticulo}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
+        </>
       )}
-
-      {subastaInfo && <CatalogoHeader subastaInfo={subastaInfo} articulosCount={articulos.length} />}
-
-      <FlatList
-        data={articulos}
-        keyExtractor={item => item.id}
-        renderItem={renderArticulo}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
 
       {/* Modal orden */}
       <Modal visible={modalOrdenVisible} transparent animationType="fade">
@@ -788,4 +803,34 @@ const styles = StyleSheet.create({
   pujaConfirmarBtnTexto: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   pujaCerradaContainer: { backgroundColor: '#FEF2F2', padding: 16, borderRadius: 12 },
   pujaCerradaTexto: { color: '#DC2626', fontSize: 14, textAlign: 'center' },
+  lockContainer: { flex: 1 },
+  lockImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, resizeMode: 'cover' },
+  lockOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  lockTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 3,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  lockSubtitle: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  lockCategoria: {
+    color: '#FCD34D',
+    fontWeight: '800',
+    fontSize: 18,
+  },
 });

@@ -7,55 +7,14 @@ import { useEffect, useRef, useState } from 'react';
 import { API_URL } from '@/src/config/env';
 import CountdownBadge from '@/src/components/CountdownBadge';
 import { Skeleton, SkeletonList } from '@/src/components/Skeleton';
+import { rankOf } from '@/src/utils/rankCategory';
 
 interface Categoria {
   id: number;
   nombre: string;
 }
 
-// No hard-coded small map here — convert any known level string to a numeric rank for comparisons
-const rankOf = (lvl?: string | number) => {
-  if (!lvl && lvl !== 0) return 1;
-  const s = String(lvl)
-    .trim()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
-  const digits = s.match(/\d+/);
-  if (digits?.[0]) {
-    const num = Number(digits[0]);
-    if (num >= 1 && num <= 5) return num;
-  }
-  if (s.includes('platino') || s.includes('platinum')) return 5;
-  if (s.includes('oro')) return 4;
-  if (s.includes('plata')) return 3;
-  if (s.includes('especial')) return 2;
-  if (s.includes('comun') || s.includes('base')) return 1;
-  switch (s) {
-    case 'base':
-    case 'comun':
-    case '1':
-      return 1;
-    case 'especial':
-    case '2':
-      return 2;
-    case 'plata':
-    case '3':
-      return 3;
-    case 'oro':
-    case '4':
-      return 4;
-    case 'platino':
-    case '5':
-      return 5;
-    case 'base'.toUpperCase():
-    case 'oro'.toUpperCase():
-    case 'platino'.toUpperCase():
-      return rankOf(s.toLowerCase());
-    default:
-      return 1;
-  }
-};
+
 
 interface SubastaItem {
   id?: string | number;
@@ -238,7 +197,7 @@ export default function SubastasScreen() {
 
     const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
     const nivelRequerido = rankOf(rawReq);
-    const bloqueada = nivelActual < nivelRequerido && estado === 'EN VIVO';
+    const bloqueada = nivelActual < nivelRequerido;
 
     return (
       <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -256,7 +215,7 @@ export default function SubastasScreen() {
         >
           <Image
             source={{ uri: item.imagen_portada }}
-            style={styles.imagen}
+            style={[styles.imagen, bloqueada && styles.imagenBloqueada]}
             resizeMode="cover"
             blurRadius={bloqueada ? 6 : 0}
           />
@@ -474,13 +433,14 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  imagenBloqueada: { opacity: 0.7 },
   overlayBloqueada: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(120, 120, 120, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
