@@ -13,9 +13,12 @@ interface ProductoItem {
   producto_id: string | number;
   descripcioncatalogo: string | null;
   descripcioncompleta: string | null;
-  status: 'EN_REVISION' | 'APROBADO' | 'RECHAZADO' | 'RETIRADO';
+  status: 'EN_REVISION' | 'PENDIENTE_CONFIRMACION' | 'APROBADO' | 'RECHAZADO' | 'RETIRADO';
   preciobase: number | null;
   comision: number | null;
+  subasta_asignada: number | null;
+  subasta_nombre: string | null;
+  confirmacion_duenio: string | null;
   fotos: string[];
 }
 
@@ -23,6 +26,7 @@ const STATUS_CONFIG = {
   APROBADO: { label: 'APROBADO', color: '#2E7D32', bg: '#E8F5E9', icon: 'checkmark-circle' as const },
   RECHAZADO: { label: 'RECHAZADO', color: '#C62828', bg: '#FFEBEE', icon: 'close-circle' as const },
   EN_REVISION: { label: 'EN REVISION', color: '#C57B00', bg: '#FFF8E1', icon: 'time' as const },
+  PENDIENTE_CONFIRMACION: { label: 'PENDIENTE DE CONFIRMACIÓN', color: '#7B4B00', bg: '#FFF3E0', icon: 'hourglass-outline' as const },
   RETIRADO: { label: 'RETIRADO', color: '#78909C', bg: '#ECEFF1', icon: 'return-up-back-outline' as const },
 };
 
@@ -122,13 +126,20 @@ export default function MisBienesScreen() {
                 throw new Error(errData.error || errData.mensaje || 'No se pudo retirar el artículo');
               }
 
+              const data = await res.json().catch(() => ({}));
+
               setSelectedProducto(null);
-              setRetiredIds((prev) => [...prev, productoId]);
-              setProductos((prev) =>
-                prev.map((p) =>
-                  p.producto_id === productoId ? { ...p, status: 'RECHAZADO' as const } : p
-                )
-              );
+
+              if (data.eliminado) {
+                setProductos((prev) => prev.filter((p) => p.producto_id !== productoId));
+              } else {
+                setRetiredIds((prev) => [...prev, productoId]);
+                setProductos((prev) =>
+                  prev.map((p) =>
+                    p.producto_id === productoId ? { ...p, status: 'RECHAZADO' as const } : p
+                  )
+                );
+              }
             } catch (error) {
               const message = error instanceof Error ? error.message : 'No se pudo retirar el artículo';
               Alert.alert('Error', message);
@@ -141,6 +152,44 @@ export default function MisBienesScreen() {
     },
     [token, removeToken, retiredIds]
   );
+
+  const [confirmingId, setConfirmingId] = useState<string | number | null>(null);
+
+  const handleConfirmarProducto = useCallback(async (productoId: string | number, accion: 'aceptar' | 'rechazar') => {
+    if (!token) return;
+    setConfirmingId(productoId);
+    try {
+      const res = await fetch(`${API_URL}/api/mis-bienes/productos/${productoId}/confirmar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ accion }),
+      });
+
+      if (res.status === 401) {
+        await removeToken();
+        return;
+      }
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al confirmar');
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          p.producto_id === productoId
+            ? { ...p, status: data.status, confirmacion_duenio: accion === 'aceptar' ? 'aceptado' : 'rechazado' }
+            : p
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al confirmar';
+      Alert.alert('Error', message);
+    } finally {
+      setConfirmingId(null);
+    }
+  }, [token, removeToken]);
 
   const openDetail = useCallback((producto: ProductoItem) => {
     setGalleryIndex(0);
@@ -249,6 +298,50 @@ export default function MisBienesScreen() {
                         {producto.descripcioncompleta}
                       </Text>
                     ) : null}
+
+                    {displayStatus === 'PENDIENTE_CONFIRMACION' && producto.preciobase != null && (
+                      <View style={styles.cotizacionBox}>
+                        <Text style={styles.cotizacionLabel}>Cotización del admin</Text>
+                        <Text style={styles.cotizacionPrice}>{formatPrice(producto.preciobase)}</Text>
+                        {producto.comision != null && (
+                          <Text style={styles.cotizacionComision}>Comisión: {producto.comision}%</Text>
+                        )}
+                        {producto.subasta_nombre && (
+                          <Text style={styles.cotizacionSubasta}>Subasta: {producto.subasta_nombre}</Text>
+                        )}
+                        <View style={styles.cotizacionActions}>
+                          <TouchableOpacity
+                            style={styles.btnAceptar}
+                            onPress={() => handleConfirmarProducto(producto.producto_id, 'aceptar')}
+                            disabled={confirmingId === producto.producto_id}
+                          >
+                            {confirmingId === producto.producto_id ? (
+                              <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                              <>
+                                <Ionicons name="checkmark" size={16} color="#FFF" />
+                                <Text style={styles.btnAceptarTexto}>ACEPTAR</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.btnRechazar}
+                            onPress={() => handleConfirmarProducto(producto.producto_id, 'rechazar')}
+                            disabled={confirmingId === producto.producto_id}
+                          >
+                            {confirmingId === producto.producto_id ? (
+                              <ActivityIndicator size="small" color="#FFF" />
+                            ) : (
+                              <>
+                                <Ionicons name="close" size={16} color="#FFF" />
+                                <Text style={styles.btnRechazarTexto}>RECHAZAR</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
                     <View style={styles.cardFooter}>
                       <View style={{ flex: 1 }} />
                       <TouchableOpacity
@@ -291,6 +384,8 @@ export default function MisBienesScreen() {
             deletingId={deletingId}
             token={token}
             isRetired={retiredIds.includes(selectedProducto.producto_id)}
+            onConfirmar={handleConfirmarProducto}
+            confirmingId={confirmingId}
           />
         )}
       </Modal>
@@ -305,6 +400,8 @@ function DetailView({
   deletingId,
   token,
   isRetired,
+  onConfirmar,
+  confirmingId,
 }: {
   producto: ProductoItem;
   onClose: () => void;
@@ -312,6 +409,8 @@ function DetailView({
   deletingId: string | number | null;
   token: string | null;
   isRetired?: boolean;
+  onConfirmar?: (id: string | number, accion: 'aceptar' | 'rechazar') => Promise<void>;
+  confirmingId?: string | number | null;
 }) {
   const displayStatus = isRetired ? 'RETIRADO' : producto.status;
   const statusCfg = STATUS_CONFIG[displayStatus as keyof typeof STATUS_CONFIG];
@@ -385,7 +484,9 @@ function DetailView({
 
           {(producto.preciobase || producto.comision) ? (
             <>
-              <Text style={styles.detailSectionTitle}>Información de subasta</Text>
+              <Text style={styles.detailSectionTitle}>
+                {displayStatus === 'PENDIENTE_CONFIRMACION' ? 'Cotización del administrador' : 'Información de subasta'}
+              </Text>
               <View style={styles.infoRow}>
                 <View style={styles.infoItem}>
                   <Text style={styles.infoLabel}>Precio base</Text>
@@ -398,8 +499,44 @@ function DetailView({
                   </View>
                 ) : null}
               </View>
+              {producto.subasta_nombre && (
+                <Text style={styles.subastaAsignada}>Subasta: {producto.subasta_nombre}</Text>
+              )}
             </>
           ) : null}
+
+          {displayStatus === 'PENDIENTE_CONFIRMACION' && (
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.btnAceptarFull}
+                onPress={() => onConfirmar?.(producto.producto_id, 'aceptar')}
+                disabled={confirmingId === producto.producto_id}
+              >
+                {confirmingId === producto.producto_id ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+                    <Text style={styles.btnAceptarTexto}>ACEPTAR Y PUBLICAR</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnRechazarFull}
+                onPress={() => onConfirmar?.(producto.producto_id, 'rechazar')}
+                disabled={confirmingId === producto.producto_id}
+              >
+                {confirmingId === producto.producto_id ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="close-circle" size={20} color="#FFF" />
+                    <Text style={styles.btnRechazarTexto}>RECHAZAR COTIZACIÓN</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.modalDeleteButton, isRetired && styles.modalDeleteButtonMild]}
@@ -606,4 +743,58 @@ const styles = StyleSheet.create({
   },
   modalDeleteButtonMild: { backgroundColor: '#78909C' },
   modalDeleteText: { color: '#FFF', fontWeight: '700', fontSize: 13, letterSpacing: 0.5 },
+  cotizacionBox: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 8,
+    gap: 4,
+  },
+  cotizacionLabel: { fontSize: 11, fontWeight: '600', color: '#B26A00', letterSpacing: 0.5, textTransform: 'uppercase' },
+  cotizacionPrice: { fontSize: 20, fontWeight: '800', color: '#7B4B00' },
+  cotizacionComision: { fontSize: 13, color: '#7B4B00', fontWeight: '500' },
+  cotizacionSubasta: { fontSize: 13, color: '#7B4B00', fontWeight: '500', marginBottom: 4 },
+  cotizacionActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  btnAceptar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2E7D32',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  btnAceptarTexto: { color: '#FFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.5 },
+  btnRechazar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C62828',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  btnRechazarTexto: { color: '#FFF', fontWeight: '700', fontSize: 12, letterSpacing: 0.5 },
+  subastaAsignada: { fontSize: 13, color: '#555', fontWeight: '500', marginTop: 4 },
+  confirmActions: { gap: 10, marginTop: 4 },
+  btnAceptarFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2E7D32',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  btnRechazarFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C62828',
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
 });
