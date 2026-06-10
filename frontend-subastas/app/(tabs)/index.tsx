@@ -7,6 +7,7 @@ import { Skeleton } from '@/src/components/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '@/src/config/env';
 import CountdownBadge from '@/src/components/CountdownBadge';
+import { rankOf } from '@/src/utils/rankCategory';
 
 type Categoria = {
   id?: number;
@@ -111,38 +112,18 @@ function SubastaCard({ item, index }: { item: Subasta; index: number }) {
     ]).start();
   });
 
-  const rankOf = (lvl?: string | number) => {
-    if (!lvl && lvl !== 0) return 1;
-    const s = String(lvl)
-      .trim()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase();
-    const digits = s.match(/\d+/);
-    if (digits?.[0]) {
-      const num = Number(digits[0]);
-      if (num >= 1 && num <= 5) return num;
-    }
-    if (s.includes('platino') || s.includes('platinum')) return 5;
-    if (s.includes('oro')) return 4;
-    if (s.includes('plata')) return 3;
-    if (s.includes('especial')) return 2;
-    if (s.includes('comun') || s.includes('base')) return 1;
-    return 1;
-  };
-
   const { nivel } = useAuth();
   const nivelUsuario = rankOf(nivel || 'base');
   const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
   const nivelReq = rankOf(rawReq);
-  const bloqueada = nivelUsuario < nivelReq && estado === 'EN VIVO';
+  const bloqueada = nivelUsuario < nivelReq;
 
   return (
     <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <View style={styles.imageContainer}>
         <Image
           source={{ uri: item.imagen_portada || item.imagen }}
-          style={styles.cardImage}
+          style={[styles.cardImage, bloqueada && styles.cardImageBloqueada]}
           blurRadius={bloqueada ? 6 : 0}
         />
         {bloqueada && (
@@ -372,6 +353,7 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: 20, marginBottom: 30 },
   imageContainer: { width: '100%', height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 15 },
   cardImage: { width: '100%', height: '100%' },
+  cardImageBloqueada: { opacity: 0.7 },
   badge: { position: 'absolute', top: 15, right: 15, backgroundColor: '#000', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   badgeText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
   cardTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 5 },
@@ -386,7 +368,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(120, 120, 120, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,

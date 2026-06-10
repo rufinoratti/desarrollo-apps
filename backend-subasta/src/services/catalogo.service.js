@@ -1,6 +1,6 @@
 const AppError = require('../utils/appError');
 const { supabase, isConfigured } = require('../config/supabase');
-const { store } = require('./data.store');
+const { store, CATEGORY_RANK } = require('./data.store');
 const {
     calcularEstadoSubastaDisplay,
     calcularFechasIso
@@ -43,10 +43,16 @@ const mapArticuloResumenLocal = (item) => ({
     tiempo_referencia: new Date().toISOString()
 });
 
-const obtenerCatalogoPorSubastaLocal = ({ subastaId, q, orden }) => {
+const obtenerCatalogoPorSubastaLocal = ({ subastaId, q, orden, usuario }) => {
     const subasta = (store.subastas || []).find((s) => String(s.id) === String(subastaId));
     if (!subasta) {
         throw new AppError('Subasta no encontrada', 404);
+    }
+
+    const rankUsuario = CATEGORY_RANK[String(usuario?.categoria || '').toLowerCase()] || 1;
+    const rankSubasta = CATEGORY_RANK[String(subasta.nivel_acceso || '').toLowerCase()] || 1;
+    if (rankUsuario < rankSubasta) {
+        throw new AppError('Nivel insuficiente para acceder a esta subasta', 403);
     }
 
     let articulos = (subasta.items || []).map(mapArticuloResumenLocal);
@@ -79,7 +85,7 @@ const obtenerCatalogoPorSubastaLocal = ({ subastaId, q, orden }) => {
     };
 };
 
-const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
+const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden, usuario }) => {
     const subastaIdNum = Number(subastaId);
     if (Number.isNaN(subastaIdNum)) {
         throw new AppError('Subasta no encontrada', 404);
@@ -97,6 +103,12 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
 
     if (!subasta) {
         throw new AppError('Subasta no encontrada', 404);
+    }
+
+    const rankUsuario = CATEGORY_RANK[String(usuario?.categoria || '').toLowerCase()] || 1;
+    const rankSubasta = CATEGORY_RANK[String(subasta.categoria || '').toLowerCase()] || 1;
+    if (rankUsuario < rankSubasta) {
+        throw new AppError('Nivel insuficiente para acceder a esta subasta', 403);
     }
 
     const { data: catalogo, error: catalogoError } = await supabase
@@ -210,29 +222,34 @@ const obtenerCatalogoPorSubastaSupabase = async ({ subastaId, q, orden }) => {
     };
 };
 
-const obtenerCatalogoPorSubasta = async ({ subastaId, q, orden }) => {
+const obtenerCatalogoPorSubasta = async ({ subastaId, q, orden, usuario }) => {
     if (!subastaId) {
         throw new AppError('Subasta no encontrada', 404);
     }
 
     if (!isConfigured) {
-        return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden });
+        return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden, usuario });
     }
 
     try {
-        return await obtenerCatalogoPorSubastaSupabase({ subastaId, q, orden });
+        return await obtenerCatalogoPorSubastaSupabase({ subastaId, q, orden, usuario });
     } catch (err) {
         if (err.statusCode === 404) {
-            return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden });
+            return obtenerCatalogoPorSubastaLocal({ subastaId, q, orden, usuario });
         }
         throw err;
     }
 };
 
-const obtenerDetalleItemLocal = ({ itemId }) => {
+const obtenerDetalleItemLocal = ({ itemId, usuario }) => {
     for (const subasta of store.subastas || []) {
         const item = (subasta.items || []).find((it) => String(it.id) === String(itemId));
         if (item) {
+            const rankUsuario = CATEGORY_RANK[String(usuario?.categoria || '').toLowerCase()] || 1;
+            const rankSubasta = CATEGORY_RANK[String(subasta.nivel_acceso || '').toLowerCase()] || 1;
+            if (rankUsuario < rankSubasta) {
+                throw new AppError('Nivel insuficiente para acceder a esta subasta', 403);
+            }
             const tiempoRestante = subasta.fecha_fin
                 ? Math.max(0, Math.floor((new Date(subasta.fecha_fin).getTime() - Date.now()) / 1000))
                 : null;
@@ -263,7 +280,7 @@ const obtenerDetalleItemLocal = ({ itemId }) => {
     throw new AppError('Artículo no encontrado', 404);
 };
 
-const obtenerDetalleItemSupabase = async ({ itemId }) => {
+const obtenerDetalleItemSupabase = async ({ itemId, usuario }) => {
     const itemIdNum = parseItemIdForDb(itemId);
     if (itemIdNum === null) {
         throw new AppError('Artículo no encontrado', 404);
@@ -347,14 +364,14 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         let subasta, subastaError;
         ({ data: subasta, error: subastaError } = await supabase
             .from('subastas')
-            .select('identificador, estado, fecha_cierre, fecha, hora')
+            .select('identificador, estado, fecha_cierre, fecha, hora, categoria')
             .eq('identificador', catalogo.subasta)
             .maybeSingle());
 
         if (subastaError && /column .*fecha_cierre/i.test(subastaError.message || '')) {
             ({ data: subasta } = await supabase
                 .from('subastas')
-                .select('identificador, estado, fecha, hora')
+                .select('identificador, estado, fecha, hora, categoria')
                 .eq('identificador', catalogo.subasta)
                 .maybeSingle());
         } else if (subastaError) {
@@ -362,6 +379,12 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
         }
 
         if (subasta) {
+            const rankUsuario = CATEGORY_RANK[String(usuario?.categoria || '').toLowerCase()] || 1;
+            const rankSubasta = CATEGORY_RANK[String(subasta.categoria || '').toLowerCase()] || 1;
+            if (rankUsuario < rankSubasta) {
+                throw new AppError('Nivel insuficiente para acceder a esta subasta', 403);
+            }
+
             const { fecha_inicio_iso, fecha_fin_iso } = calcularFechasIso(subasta);
             subastaInfo = {
                 id: String(subasta.identificador),
@@ -396,20 +419,20 @@ const obtenerDetalleItemSupabase = async ({ itemId }) => {
     };
 };
 
-const obtenerDetalleItem = async ({ itemId }) => {
+const obtenerDetalleItem = async ({ itemId, usuario }) => {
     if (!itemId) {
         throw new AppError('Artículo no encontrado', 404);
     }
 
     if (!isConfigured) {
-        return obtenerDetalleItemLocal({ itemId });
+        return obtenerDetalleItemLocal({ itemId, usuario });
     }
 
     try {
-        return await obtenerDetalleItemSupabase({ itemId });
+        return await obtenerDetalleItemSupabase({ itemId, usuario });
     } catch (err) {
         if (err.statusCode === 404) {
-            return obtenerDetalleItemLocal({ itemId });
+            return obtenerDetalleItemLocal({ itemId, usuario });
         }
         throw err;
     }

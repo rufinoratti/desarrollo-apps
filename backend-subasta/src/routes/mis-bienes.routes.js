@@ -20,6 +20,7 @@ router.get('/mis-bienes/subastas', authMiddleware, misBienesController.obtenerSu
 router.get('/mis-bienes/catalogos', authMiddleware, misBienesController.listarCatalogos);
 router.get('/mis-bienes', authMiddleware, misBienesController.listarMisBienes);
 router.post('/mis-bienes/productos', authMiddleware, upload.array('fotos', 6), multerErrorHandler, misBienesController.crearProducto);
+router.post('/mis-bienes/productos/:id/confirmar', authMiddleware, misBienesController.confirmarProducto);
 router.delete('/mis-bienes/productos/:id', authMiddleware, misBienesController.retirarProducto);
 
 module.exports = router;
