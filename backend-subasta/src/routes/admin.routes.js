@@ -25,8 +25,10 @@ const upload = createUploader({
 });
 
 router.put('/admin/clientes/:id/evaluacion', authMiddleware, adminController.evaluarCliente);
+router.put('/admin/medios-pago/:id/evaluacion', authMiddleware, adminController.evaluarMedioPago);
 router.get('/admin/clientes/pendientes', authMiddleware, adminController.listarClientesPendientes);
 router.get('/admin/clientes/rechazados', authMiddleware, adminController.listarClientesRechazados);
+router.get('/admin/medios-pago/pendientes', authMiddleware, adminController.listarMediosPagoPendientes);
 router.put('/admin/productos/:id/evaluacion', authMiddleware, adminController.evaluarProducto);
 router.get('/admin/productos/pendientes', authMiddleware, adminController.listarProductosPendientes);
 router.post('/admin/subastas', authMiddleware, adminController.crearSubasta);

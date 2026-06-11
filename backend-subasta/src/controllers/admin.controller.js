@@ -11,6 +11,16 @@ const evaluarCliente = async (req, res, next) => {
     }
 };
 
+const evaluarMedioPago = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const result = await adminService.evaluarMedioPago({ id, payload: req.body });
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
 const evaluarProducto = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -54,6 +64,15 @@ const listarClientesPendientes = async (req, res, next) => {
 const listarProductosPendientes = async (req, res, next) => {
     try {
         const result = await adminService.listarProductosPendientes();
+        return res.status(200).json(result);
+    } catch (error) {
+        return next(error);
+    }
+};
+
+const listarMediosPagoPendientes = async (req, res, next) => {
+    try {
+        const result = await adminService.listarMediosPagoPendientes();
         return res.status(200).json(result);
     } catch (error) {
         return next(error);
@@ -118,10 +137,12 @@ const cerrarSubasta = async (req, res, next) => {
 
 module.exports = {
     evaluarCliente,
+    evaluarMedioPago,
     evaluarProducto,
     crearSubasta,
     subirPortadaSubasta,
     listarClientesPendientes,
+    listarMediosPagoPendientes,
     listarProductosPendientes,
     listarClientesRechazados,
     obtenerOpciones,
