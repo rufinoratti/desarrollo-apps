@@ -19,6 +19,7 @@ const CATEGORIAS_CLIENTE = ['comun', 'especial', 'plata', 'oro', 'platino'];
 const SI_NO = ['Sí', 'No'];
 const TABS = [
   { key: 'pendientes' as const, label: 'PENDIENTES' },
+  { key: 'medios_pago' as const, label: 'MED. PAGO' },
   { key: 'rechazados' as const, label: 'RECHAZADOS' },
   { key: 'productos' as const, label: 'PRODUCTOS' },
   { key: 'subastas' as const, label: 'SUBASTAS' },
@@ -31,6 +32,24 @@ interface ClientePendiente {
   email?: string | null;
   admitido?: string | null;
   categoria?: string | null;
+  medio_pago?: {
+    id: number;
+    tipo: string;
+    descripcion: string;
+    verificado: string | null;
+  } | null;
+}
+
+interface MedioPagoPendiente {
+  medio_id: number;
+  cliente_id: string | number;
+  nombre?: string | null;
+  email?: string | null;
+  documento?: string | null;
+  tipo: string;
+  descripcion: string;
+  verificado: string | null;
+  admitido_cliente?: string | null;
 }
 
 interface ProductoPendiente {
@@ -55,17 +74,22 @@ function formatPrice(value: number | null | undefined): string {
   return `$${Number(value).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
+function getTipoLabel(tipo: string): string {
+  return tipo.replace(/_/g, ' ').toUpperCase();
+}
+
 export default function AdminPanel() {
   const { token, removeToken } = useAuth();
   const [clientes, setClientes] = useState<ClientePendiente[]>([]);
   const [clientesRechazados, setClientesRechazados] = useState<ClientePendiente[]>([]);
+  const [mediosPagoPendientes, setMediosPagoPendientes] = useState<MedioPagoPendiente[]>([]);
   const [productos, setProductos] = useState<ProductoPendiente[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [revisores, setRevisores] = useState<Revisor[]>([]);
   const [subastasLista, setSubastasLista] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<'pendientes' | 'rechazados' | 'productos' | 'subastas'>('pendientes');
+  const [tab, setTab] = useState<'pendientes' | 'medios_pago' | 'rechazados' | 'productos' | 'subastas'>('pendientes');
 
   const [categoriaPorCliente, setCategoriaPorCliente] = useState<Record<string, string>>({});
   const [revisorId, setRevisorId] = useState('');
@@ -168,6 +192,15 @@ export default function AdminPanel() {
     return (await res.json()) as ClientePendiente[];
   }, [token, handleUnauthorized]);
 
+  const fetchMediosPagoPendientes = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/medios-pago/pendientes`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { handleUnauthorized(); return [] as MedioPagoPendiente[]; }
+      if (!res.ok) return [] as MedioPagoPendiente[];
+      return (await res.json()) as MedioPagoPendiente[];
+    } catch { return [] as MedioPagoPendiente[]; }
+  }, [token, handleUnauthorized]);
+
   const fetchProductos = useCallback(async () => {
     const res = await fetch(`${API_URL}/api/admin/productos/pendientes`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) { handleUnauthorized(); return [] as ProductoPendiente[]; }
@@ -204,15 +237,15 @@ export default function AdminPanel() {
 
   const cargarDatos = useCallback(async () => {
     try {
-      const [c, cr, p, cats, revs, subs] = await Promise.all([
-        fetchClientes(), fetchClientesRechazados(), fetchProductos(),
-        fetchCategorias(), fetchRevisores(), fetchSubastas(),
+      const [c, cr, mp, p, cats, revs, subs] = await Promise.all([
+        fetchClientes(), fetchClientesRechazados(), fetchMediosPagoPendientes(),
+        fetchProductos(), fetchCategorias(), fetchRevisores(), fetchSubastas(),
       ]);
-      setClientes(c); setClientesRechazados(cr); setProductos(p);
-      setCategorias(cats); setRevisores(revs); setSubastasLista(subs);
+      setClientes(c); setClientesRechazados(cr); setMediosPagoPendientes(mp);
+      setProductos(p); setCategorias(cats); setRevisores(revs); setSubastasLista(subs);
     } catch { Alert.alert('Error', 'No se pudieron cargar los datos'); }
     finally { setLoading(false); }
-  }, [fetchClientes, fetchClientesRechazados, fetchProductos, fetchCategorias, fetchRevisores, fetchSubastas]);
+  }, [fetchClientes, fetchClientesRechazados, fetchMediosPagoPendientes, fetchProductos, fetchCategorias, fetchRevisores, fetchSubastas]);
 
   useEffect(() => { if (token) cargarDatos(); }, [token, cargarDatos]);
 
@@ -220,9 +253,56 @@ export default function AdminPanel() {
 
   const categoriasOpciones = useMemo(() => CATEGORIAS_CLIENTE.map((c, i) => ({ id: i+1, label: c })), []);
 
+  // ── Evaluar medio de pago ─────────────────────────────────────────────────
+  const handleEvaluarMedioPago = async (medioId: number, verificado: 'si' | 'no') => {
+    Alert.alert(
+      verificado === 'si' ? 'Verificar medio de pago' : 'Rechazar medio de pago',
+      verificado === 'no'
+        ? 'El cliente pasará a RECHAZADO automáticamente. ¿Confirmás?'
+        : '¿Confirmás la verificación del medio de pago?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: verificado === 'si' ? 'VERIFICAR' : 'RECHAZAR', style: verificado === 'no' ? 'destructive' : 'default', onPress: async () => {
+          try {
+            const res = await fetch(`${API_URL}/api/admin/medios-pago/${medioId}/evaluacion`, {
+              method: 'PUT',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ verificado }),
+            });
+            if (res.status === 401) { handleUnauthorized(); return; }
+            if (!res.ok) { Alert.alert('Error', 'No se pudo actualizar el medio de pago.'); return; }
+            await cargarDatos();
+          } catch { Alert.alert('Error', 'No se pudo actualizar el medio de pago.'); }
+        }},
+      ]
+    );
+  };
+
+  // ── Evaluar cliente (requiere medio de pago verificado para aprobar) ──────
   const handleEvaluarCliente = async (clienteId: string | number, admitido: 'si' | 'no') => {
     const categoria = categoriaPorCliente[String(clienteId)];
-    if (admitido === 'si' && !categoria) { Alert.alert('Falta categoría', 'Seleccioná una categoría antes de aprobar.'); return; }
+    if (admitido === 'si' && !categoria) {
+      Alert.alert('Falta categoría', 'Seleccioná una categoría antes de aprobar.');
+      return;
+    }
+
+    // Verificar que el medio de pago esté verificado antes de aprobar
+    if (admitido === 'si') {
+      const cliente = clientes.find(c => String(c.cliente_id) === String(clienteId));
+      if (!cliente?.medio_pago) {
+        Alert.alert('Sin medio de pago', 'Este cliente no tiene un medio de pago registrado. No se puede aprobar.');
+        return;
+      }
+      if (cliente.medio_pago.verificado !== 'si') {
+        Alert.alert(
+          'Medio de pago sin verificar',
+          'Debés verificar el medio de pago del cliente antes de poder aprobarlo. Usá la pestaña "MED. PAGO".',
+          [{ text: 'Entendido' }]
+        );
+        return;
+      }
+    }
+
     try {
       const res = await fetch(`${API_URL}/api/admin/clientes/${clienteId}/evaluacion`, {
         method: 'PUT',
@@ -230,11 +310,17 @@ export default function AdminPanel() {
         body: JSON.stringify({ admitido, categoria: admitido === 'si' ? categoria : undefined }),
       });
       if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) { Alert.alert('Error', 'No se pudo actualizar el cliente.'); return; }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData?.error || errData?.message || 'No se pudo actualizar el cliente.';
+        Alert.alert('Error', msg);
+        return;
+      }
       await cargarDatos();
     } catch { Alert.alert('Error', 'No se pudo actualizar el cliente.'); }
   };
 
+  // ── Evaluar producto ──────────────────────────────────────────────────────
   const handleEvaluarProducto = async (productoId: string | number, disponible: 'si' | 'no') => {
     const revisor = Number(revisorId);
     if (!revisorId || Number.isNaN(revisor)) { Alert.alert('Falta revisor', 'Seleccioná un revisor.'); return; }
@@ -260,6 +346,7 @@ export default function AdminPanel() {
     } catch { Alert.alert('Error', 'No se pudo actualizar el producto.'); }
   };
 
+  // ── Crear subasta ─────────────────────────────────────────────────────────
   const handleCrearSubasta = async () => {
     if (!formSubasta.nombre || !formSubasta.fecha || !formSubasta.hora || !formSubasta.categoria || !formSubasta.tematica) {
       Alert.alert('Faltan datos', 'Completá los campos obligatorios.'); return;
@@ -309,7 +396,13 @@ export default function AdminPanel() {
     setTab(key);
   };
 
-  const counts = { pendientes: clientes.length, rechazados: clientesRechazados.length, productos: productos.length, subastas: subastasLista.length };
+  const counts = {
+    pendientes: clientes.length,
+    medios_pago: mediosPagoPendientes.length,
+    rechazados: clientesRechazados.length,
+    productos: productos.length,
+    subastas: subastasLista.length,
+  };
 
   if (!token) return (
     <SafeAreaView style={s.container}>
@@ -346,9 +439,9 @@ export default function AdminPanel() {
             <View style={s.metricsGrid}>
               {[
                 { label: 'PENDIENTES', value: counts.pendientes },
+                { label: 'MED. PAGO', value: counts.medios_pago },
                 { label: 'RECHAZADOS', value: counts.rechazados },
                 { label: 'PRODUCTOS', value: counts.productos },
-                { label: 'SUBASTAS', value: counts.subastas },
               ].map(m => (
                 <View key={m.label} style={s.metricCard}>
                   <Text style={s.metricLabel}>{m.label}</Text>
@@ -359,57 +452,172 @@ export default function AdminPanel() {
           )}
 
           {/* Tab bar */}
-          <View style={s.tabBar}>
-            {TABS.map(t => (
-              <TouchableOpacity
-                key={t.key}
-                style={[s.tabItem, tab === t.key && s.tabItemActive]}
-                onPress={() => switchTab(t.key)}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
+            <View style={s.tabBar}>
+              {TABS.map(t => (
+                <TouchableOpacity
+                  key={t.key}
+                  style={[s.tabItem, tab === t.key && s.tabItemActive]}
+                  onPress={() => switchTab(t.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>{t.label}</Text>
+                  {counts[t.key] > 0 && (
+                    <View style={s.tabBadge}>
+                      <Text style={s.tabBadgeText}>{counts[t.key]}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
 
           {/* Contenido */}
           {loading ? (
             <SkeletonList rows={4} gap={12} />
           ) : (
             <>
-              {/* PENDIENTES */}
+              {/* ── PENDIENTES ── */}
               {tab === 'pendientes' && (
                 <>
                   <Text style={s.sectionLabel}>CLIENTES PENDIENTES ({clientes.length})</Text>
+
+                  {/* Banner explicativo del flujo de dos pasos */}
+                  <View style={s.infoBanner}>
+                    <Ionicons name="information-circle-outline" size={18} color="#1D4ED8" />
+                    <Text style={s.infoBannerText}>
+                    Para aprobar un cliente primero debés verificar su medio de pago en la pestaña &quot;MED. PAGO&quot;.                    </Text>
+                  </View>
+
                   {clientes.length === 0 ? (
                     <View style={s.emptyState}>
                       <Ionicons name="checkmark-circle-outline" size={40} color="#CCC" />
                       <Text style={s.emptyText}>Sin clientes pendientes</Text>
                     </View>
-                  ) : clientes.map(c => (
-                    <View key={String(c.cliente_id)} style={s.card}>
-                      <View style={s.cardHeader}>
-                        <View>
-                          <Text style={s.cardName}>{c.nombre || 'Sin nombre'}</Text>
-                          <Text style={s.cardMeta}>{c.email || '—'}</Text>
-                          <Text style={s.cardMeta}>{c.documento || '—'}</Text>
+                  ) : clientes.map(c => {
+                    const medioPagoVerificado = c.medio_pago?.verificado === 'si';
+                    const tieneMedioPago = !!c.medio_pago;
+                    return (
+                      <View key={String(c.cliente_id)} style={s.card}>
+                        <View style={s.cardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.cardName}>{c.nombre || 'Sin nombre'}</Text>
+                            <Text style={s.cardMeta}>{c.email || '—'}</Text>
+                            <Text style={s.cardMeta}>{c.documento || '—'}</Text>
+                          </View>
+                          <View style={s.badgePending}><Text style={s.badgePendingText}>PENDIENTE</Text></View>
                         </View>
-                        <View style={s.badgePending}><Text style={s.badgePendingText}>PENDIENTE</Text></View>
+                        <View style={s.cardDivider} />
+
+                        {/* Estado del medio de pago (resumen) */}
+                        <View style={s.medioPagoResumen}>
+                          <Ionicons
+                            name={!tieneMedioPago ? 'alert-circle-outline' : medioPagoVerificado ? 'checkmark-circle' : 'time-outline'}
+                            size={16}
+                            color={!tieneMedioPago ? '#DC2626' : medioPagoVerificado ? '#059669' : '#D97706'}
+                          />
+                          <Text style={[
+                            s.medioPagoResumenText,
+                            !tieneMedioPago && { color: '#DC2626' },
+                            medioPagoVerificado && { color: '#059669' },
+                            !medioPagoVerificado && tieneMedioPago && { color: '#D97706' },
+                          ]}>
+                            {!tieneMedioPago
+                              ? 'Sin medio de pago registrado'
+                              : medioPagoVerificado
+                              ? `Medio de pago verificado · ${getTipoLabel(c.medio_pago!.tipo)}`
+                              : `Medio de pago pendiente de verificación · ${getTipoLabel(c.medio_pago!.tipo)}`
+                            }
+                          </Text>
+                        </View>
+
+                        {!medioPagoVerificado && tieneMedioPago && (
+                          <TouchableOpacity
+                            style={s.goToMedioBtn}
+                            onPress={() => switchTab('medios_pago')}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={s.goToMedioBtnText}>Ir a verificar medio de pago →</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        <View style={s.cardDivider} />
+
+                        <Select
+                          label="Categoría"
+                          value={categoriaPorCliente[String(c.cliente_id)] || ''}
+                          placeholder="Seleccionar categoría"
+                          options={categoriasOpciones}
+                          onSelect={(_, nombre) => setCategoriaPorCliente(prev => ({ ...prev, [String(c.cliente_id)]: nombre }))}
+                        />
+                        <View style={s.actionRow}>
+                          <TouchableOpacity
+                            style={[s.btnPrimary, (!medioPagoVerificado || !tieneMedioPago) && s.btnDisabled]}
+                            onPress={() => handleEvaluarCliente(c.cliente_id, 'si')}
+                            disabled={!medioPagoVerificado || !tieneMedioPago}
+                          >
+                            <Text style={s.btnPrimaryText}>ACEPTAR</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={s.btnSecondary} onPress={() => handleEvaluarCliente(c.cliente_id, 'no')}>
+                            <Text style={s.btnSecondaryText}>RECHAZAR</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* ── MEDIOS DE PAGO ── */}
+              {tab === 'medios_pago' && (
+                <>
+                  <Text style={s.sectionLabel}>MEDIOS DE PAGO PENDIENTES ({mediosPagoPendientes.length})</Text>
+
+                  <View style={s.infoBanner}>
+                    <Ionicons name="card-outline" size={18} color="#1D4ED8" />
+                    <Text style={s.infoBannerText}>
+                      Paso 1: Verificá o rechazá el medio de pago de cada cliente. Si lo rechazás, el cliente queda rechazado automáticamente.
+                    </Text>
+                  </View>
+
+                  {mediosPagoPendientes.length === 0 ? (
+                    <View style={s.emptyState}>
+                      <Ionicons name="card-outline" size={40} color="#CCC" />
+                      <Text style={s.emptyText}>Sin medios de pago pendientes</Text>
+                    </View>
+                  ) : mediosPagoPendientes.map(mp => (
+                    <View key={`mp-${mp.medio_id}`} style={s.card}>
+                      <View style={s.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.cardName}>{mp.nombre || 'Sin nombre'}</Text>
+                          <Text style={s.cardMeta}>{mp.email || '—'}</Text>
+                          <Text style={s.cardMeta}>Doc: {mp.documento || '—'}</Text>
+                        </View>
+                        <View style={s.badgePending}><Text style={s.badgePendingText}>SIN VERIFICAR</Text></View>
                       </View>
                       <View style={s.cardDivider} />
-                      <Select
-                        label="Categoría"
-                        value={categoriaPorCliente[String(c.cliente_id)] || ''}
-                        placeholder="Seleccionar categoría"
-                        options={categoriasOpciones}
-                        onSelect={(_, nombre) => setCategoriaPorCliente(prev => ({ ...prev, [String(c.cliente_id)]: nombre }))}
-                      />
+
+                      {/* Detalle del medio de pago */}
+                      <View style={s.medioPagoDetalle}>
+                        <View style={s.medioPagoDetalleIcon}>
+                          <Ionicons
+                            name={mp.tipo === 'TARJETA' ? 'card' : mp.tipo === 'CHEQUE' ? 'document-text' : 'business'}
+                            size={20}
+                            color="#000"
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.medioPagoTipo}>{getTipoLabel(mp.tipo)}</Text>
+                          <Text style={s.medioPagoDesc}>{mp.descripcion || '—'}</Text>
+                        </View>
+                      </View>
+
                       <View style={s.actionRow}>
-                        <TouchableOpacity style={s.btnPrimary} onPress={() => handleEvaluarCliente(c.cliente_id, 'si')}>
-                          <Text style={s.btnPrimaryText}>ACEPTAR</Text>
+                        <TouchableOpacity style={s.btnPrimary} onPress={() => handleEvaluarMedioPago(mp.medio_id, 'si')}>
+                          <Text style={s.btnPrimaryText}>VERIFICAR</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={s.btnSecondary} onPress={() => handleEvaluarCliente(c.cliente_id, 'no')}>
-                          <Text style={s.btnSecondaryText}>RECHAZAR</Text>
+                        <TouchableOpacity style={s.btnDanger} onPress={() => handleEvaluarMedioPago(mp.medio_id, 'no')}>
+                          <Text style={s.btnDangerText}>RECHAZAR</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -417,7 +625,7 @@ export default function AdminPanel() {
                 </>
               )}
 
-              {/* RECHAZADOS */}
+              {/* ── RECHAZADOS ── */}
               {tab === 'rechazados' && (
                 <>
                   <Text style={s.sectionLabel}>CLIENTES RECHAZADOS ({clientesRechazados.length})</Text>
@@ -451,7 +659,7 @@ export default function AdminPanel() {
                 </>
               )}
 
-              {/* PRODUCTOS */}
+              {/* ── PRODUCTOS ── */}
               {tab === 'productos' && (
                 <>
                   <Text style={s.sectionLabel}>PRODUCTOS PENDIENTES ({productos.length})</Text>
@@ -509,7 +717,7 @@ export default function AdminPanel() {
                 </>
               )}
 
-              {/* SUBASTAS */}
+              {/* ── SUBASTAS ── */}
               {tab === 'subastas' && (
                 <>
                   <Text style={s.sectionLabel}>NUEVA SUBASTA</Text>
@@ -688,35 +896,55 @@ const s = StyleSheet.create({
   pageTitle: { fontSize: 28, fontWeight: '900', color: '#000', lineHeight: 32 },
 
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 },
-  metricCard: { width: '48%', backgroundColor: '#FFF', padding: 14, borderWidth: 0.5, borderColor: '#E0E0E0',borderRadius: 12 },
+  metricCard: { width: '48%', backgroundColor: '#FFF', padding: 14, borderWidth: 0.5, borderColor: '#E0E0E0', borderRadius: 12 },
   metricLabel: { fontSize: 9, color: '#888', letterSpacing: 1.5, marginBottom: 6 },
   metricValue: { fontSize: 22, fontWeight: '900', color: '#000' },
 
-  tabBar: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#E0E0E0', marginBottom: 24 },
-  tabItem: { flex: 1, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabBar: { flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: '#E0E0E0' },
+  tabItem: { paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent', flexDirection: 'row', gap: 6 },
   tabItemActive: { borderBottomColor: '#000' },
   tabText: { fontSize: 9, letterSpacing: 1, color: '#888', fontWeight: '700' },
   tabTextActive: { color: '#000' },
+  tabBadge: { backgroundColor: '#000', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, minWidth: 16, alignItems: 'center' },
+  tabBadgeText: { fontSize: 8, color: '#FFF', fontWeight: '700' },
 
   sectionLabel: { fontSize: 10, color: '#888', letterSpacing: 2, marginBottom: 14 },
 
-  card: {borderRadius: 12, backgroundColor: '#FFF', borderWidth: 0.5, borderColor: '#E0E0E0', padding: 16, marginBottom: 12 },
+  infoBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, marginBottom: 16, borderWidth: 0.5, borderColor: '#BFDBFE' },
+  infoBannerText: { flex: 1, fontSize: 12, color: '#1D4ED8', lineHeight: 18 },
+
+  card: { borderRadius: 12, backgroundColor: '#FFF', borderWidth: 0.5, borderColor: '#E0E0E0', padding: 16, marginBottom: 12 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
   cardDivider: { height: 0.5, backgroundColor: '#E0E0E0', marginBottom: 14 },
   cardName: { fontSize: 15, fontWeight: '700', color: '#000', marginBottom: 2 },
   cardMeta: { fontSize: 12, color: '#666', lineHeight: 18 },
 
-  badgePending: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4 },
+  badgePending: { backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   badgePendingText: { fontSize: 9, fontWeight: '700', color: '#92400E', letterSpacing: 1 },
-  badgeRejected: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4 },
+  badgeRejected: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   badgeRejectedText: { fontSize: 9, fontWeight: '700', color: '#991B1B', letterSpacing: 1 },
+  badgeVerified: { backgroundColor: '#D1FAE5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+  badgeVerifiedText: { fontSize: 9, fontWeight: '700', color: '#065F46', letterSpacing: 1 },
+
+  medioPagoResumen: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  medioPagoResumenText: { fontSize: 12, fontWeight: '600', color: '#D97706', flex: 1 },
+
+  goToMedioBtn: { backgroundColor: '#EFF6FF', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 12, alignSelf: 'flex-start' },
+  goToMedioBtnText: { fontSize: 12, color: '#1D4ED8', fontWeight: '600' },
+
+  medioPagoDetalle: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F8F9FA', borderRadius: 10, padding: 12, marginBottom: 14 },
+  medioPagoDetalleIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E0E0E0', alignItems: 'center', justifyContent: 'center' },
+  medioPagoTipo: { fontSize: 13, fontWeight: '700', color: '#000', marginBottom: 2 },
+  medioPagoDesc: { fontSize: 12, color: '#666' },
 
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   btnPrimary: { borderRadius: 8, flex: 1, backgroundColor: '#000', paddingVertical: 12, alignItems: 'center' },
   btnPrimaryText: { color: '#FFF', fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
   btnSecondary: { borderRadius: 8, flex: 1, borderWidth: 0.5, borderColor: '#000', paddingVertical: 10, alignItems: 'center' },
   btnSecondaryText: { color: '#000', fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
-  btnDisabled: { opacity: 0.5 },
+  btnDanger: { borderRadius: 8, flex: 1, backgroundColor: '#DC2626', paddingVertical: 12, alignItems: 'center' },
+  btnDangerText: { color: '#FFF', fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  btnDisabled: { opacity: 0.35 },
 
   productCard: { borderRadius: 12, backgroundColor: '#FFF', borderWidth: 0.5, borderColor: '#E0E0E0', marginBottom: 12, overflow: 'hidden' },
   productImageWrap: { width: '100%', height: 160, backgroundColor: '#F0F0F0', position: 'relative', justifyContent: 'center', alignItems: 'center' },

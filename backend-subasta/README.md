@@ -1,98 +1,103 @@
 # Rematix Backend
 
-Backend del proyecto **Rematix** (trabajo de facultad).  
-Este README documenta el **Módulo 1: Autenticación y Registro**.
+Backend de **Rematix**, plataforma de subastas de lujo. Desarrollado con Node.js + Express.
 
-## Estado actual
+## 🚀 Tecnologías
 
-- ✅ Registro en 4 pasos
-- ✅ Login con JWT
-- ✅ Logout
-- ✅ Recuperación de clave
-- ✅ Catálogos: países y bancos
-- ✅ Funciona en **modo local** (memoria) para pruebas con Postman
-- ⚠️ Modo Supabase disponible, pero recomendado validar primero flujo local completo
+- **Runtime:** Node.js
+- **Framework:** Express
+- **Autenticación:** JWT + bcryptjs
+- **Base de datos:** Supabase (PostgreSQL)
+- **Almacenamiento:** Supabase Storage (media)
+- **Archivos:** Multer + Sharp
 
----
+## 📦 Requisitos
 
-## Tecnologías
+- Node.js >= 18
+- npm
 
-- Node.js
-- Express
-- bcryptjs
-- jsonwebtoken
-- multer (para subida de DNI)
-- Supabase (opcional)
+## 🔧 Puesta en marcha local
 
----
+1. Clonar el repositorio y entrar al directorio:
 
-## Variables de entorno sugeridas
-
-```env
-JWT_SECRET=rematix-dev-secret-key-change-in-production
-JWT_EXPIRES_IN=24h
-SUPABASE_ENABLED=false
-RECOVERY_COOLDOWN_MS=60000
+```bash
+git clone https://github.com/rufinoratti/desarrollo-apps.git
+cd desarrollo-apps/backend-subasta
 ```
 
----
+2. Instalar dependencias:
 
-## Flujo de registro (Módulo 1)
+```bash
+npm install
+```
 
-1. `POST /auth/registro/paso1`  
-   Crea registro temporal con datos personales.
+3. Copiar el archivo de entorno y configurarlo:
 
-2. `POST /auth/registro/paso2`  
-   Asocia contraseña (valida seguridad + hash bcrypt).
+```bash
+cp .env.example .env
+```
 
-3. `POST /auth/registro/paso3`  
-   Sube DNI frente/dorso para KYC.
+Editar `.env` con los valores correspondientes (ver sección de variables).
 
-4. `POST /auth/registro/paso4-pago`  
-   Vincula medio de pago inicial y finaliza registro (retorna JWT).
+4. Iniciar el servidor:
 
----
+```bash
+npm run dev
+```
 
-## Endpoints implementados
+El servidor corre en `http://localhost:3000`.
 
-- `POST /auth/registro/paso1`
-- `POST /auth/registro/paso2`
-- `POST /auth/registro/paso3`
-- `POST /auth/registro/paso4-pago`
-- `POST /auth/login`
-- `POST /auth/logout`
-- `POST /auth/recuperar-clave`
-- `GET /paises`
-- `GET /bancos`
+## 📄 Variables de entorno
 
----
+| Variable | Descripción | Default |
+|---|---|---|
+| `PORT` | Puerto del servidor | `3000` |
+| `JWT_SECRET` | Clave secreta para firmar tokens | — |
+| `JWT_EXPIRES_IN` | Duración del token | `24h` |
+| `SUPABASE_ENABLED` | Habilitar Supabase | `false` |
+| `SUPABASE_URL` | URL del proyecto Supabase | — |
+| `SUPABASE_ANON_KEY` | Anon key de Supabase | — |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key de Supabase | — |
+| `SUPABASE_BUCKET_MEDIA` | Bucket para archivos | `rematix-media` |
+| `RECOVERY_COOLDOWN_MS` | Cooldown entre recuperaciones | `60000` |
 
-## Reglas principales implementadas
+## 🌐 Hosting (Render)
 
-- Contraseña:
-  - mínimo 8 caracteres
-  - al menos 1 mayúscula
-  - al menos 1 número
-- Email normalizado a minúsculas
-- Validación de secuencia de pasos (no se puede saltear)
-- Validación de tipo/detalle de medio de pago:
-  - TARJETA
-  - CUENTA_BANCARIA
-  - CHEQUE
-- Recuperación de clave con rate-limit básico por email (memoria)
+El backend está deployado en Render:
 
----
+- **URL:** [https://desarrollo-apps-zq82.onrender.com](https://desarrollo-apps-zq82.onrender.com)
 
-## Prueba rápida en Postman (local)
+### Deploy manual
 
-1. Ejecutar backend con `SUPABASE_ENABLED=false`.
-2. Probar en orden:
-   - paso1 → guardar `registro_id`
-   - paso2
-   - paso3 (multipart con `dni_frente` y `dni_dorso`)
-   - paso4
-   - login
-3. En endpoints protegidos, usar:
-   - `Authorization: Bearer <token>`
+1. Conectar el repositorio a Render.
+2. Configurar como **Web Service**.
+3. **Build Command:** `npm install`
+4. **Start Command:** `npm start`
+5. Configurar las variables de entorno en el dashboard de Render.
 
----
+## 📖 Documentación de la API
+
+La API está documentada con OpenAPI 3.0:
+
+👉 [Swagger Interactive](https://petstore.swagger.io/?url=https://raw.githubusercontent.com/rufinoratti/desarrollo-apps/refs/heads/main/rematix-api.yaml)
+
+## 🧪 Tests
+
+```bash
+npm test
+```
+
+## 📁 Estructura
+
+```
+backend-subasta/
+├── src/
+│   ├── index.js          # Entry point
+│   ├── routes/           # Rutas Express
+│   ├── controllers/      # Lógica de negocio
+│   ├── middlewares/       # Middlewares (auth, multer)
+│   └── config/           # Configuración (Supabase, etc.)
+├── tests/                # Tests
+├── .env.example
+└── package.json
+```
