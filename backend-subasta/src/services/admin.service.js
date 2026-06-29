@@ -1,5 +1,5 @@
 const AppError = require('../utils/appError');
-const { supabase, isConfigured } = require('../config/supabase');
+const { supabaseAdmin, isConfigured } = require('../config/supabase');
 const storage = require('../config/storage');
 const { store, nextId } = require('./data.store');
 
@@ -49,7 +49,29 @@ const evaluarCliente = async ({ id, payload }) => {
     }
 
     if (isConfigured) {
-        const { data, error } = await supabase
+        // Si se intenta aprobar, verificar que el medio de pago principal esté verificado
+        if (admitido === 'si') {
+            const { data: medios } = await supabaseAdmin
+                .from('mediosdepago')
+                .select('identificador, verificado, es_principal')
+                .eq('cliente_id', clienteId)
+                .eq('es_principal', 'si')
+                .maybeSingle();
+
+            if (!medios) {
+                const err = new AppError('El cliente no tiene un medio de pago registrado. No se puede aprobar.', 400);
+                err.codigo = 'MEDIO_PAGO_REQUERIDO';
+                throw err;
+            }
+
+            if (medios.verificado !== 'si') {
+                const err = new AppError('El medio de pago aún no fue verificado. Verificalo antes de aprobar al cliente.', 400);
+                err.codigo = 'MEDIO_PAGO_NO_VERIFICADO';
+                throw err;
+            }
+        }
+
+        const { data, error } = await supabaseAdmin
             .from('clientes')
             .update({
                 admitido,
@@ -78,6 +100,21 @@ const evaluarCliente = async ({ id, payload }) => {
     const user = (store.users || []).find((u) => String(u.id) === String(clienteId));
     if (!user) {
         throw new AppError('Cliente no encontrado', 404);
+    }
+
+    // Fallback local: verificar medio de pago antes de aprobar
+    if (admitido === 'si') {
+        const medio = (user.medios_pago || []).find(m => m.es_principal === 'si') || (user.medios_pago || [])[0] || null;
+        if (!medio) {
+            const err = new AppError('El cliente no tiene un medio de pago registrado. No se puede aprobar.', 400);
+            err.codigo = 'MEDIO_PAGO_REQUERIDO';
+            throw err;
+        }
+        if (medio.verificado !== 'si') {
+            const err = new AppError('El medio de pago aún no fue verificado. Verificalo antes de aprobar al cliente.', 400);
+            err.codigo = 'MEDIO_PAGO_NO_VERIFICADO';
+            throw err;
+        }
     }
 
     if (admitido === 'si') {
@@ -144,7 +181,7 @@ const evaluarProducto = async ({ id, payload }) => {
 
     if (isConfigured) {
         if (disponible === 'si') {
-            const { data: catalogoRow, error: catalogoError } = await supabase
+            const { data: catalogoRow, error: catalogoError } = await supabaseAdmin
                 .from('catalogos')
                 .select('identificador')
                 .eq('subasta', subastaId)
@@ -163,27 +200,16 @@ const evaluarProducto = async ({ id, payload }) => {
             resolvedCatalogoId = catalogoRow.identificador;
         }
 
-        const updateFields = {
-            revisor,
-            descripcioncatalogo,
-            seguro
-        };
-
-        if (disponible === 'si') {
-            updateFields.preciobase_asignado = preciobase;
-            updateFields.comision_asignada = comision;
-            updateFields.subasta_asignada = subastaId;
-            updateFields.confirmacion_duenio = 'pendiente';
-        } else {
-            updateFields.disponible = 'no';
-            updateFields.confirmacion_duenio = 'rechazado';
-        }
-
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('productos')
-            .update(updateFields)
+            .update({
+                disponible,
+                revisor,
+                descripcioncatalogo,
+                seguro
+            })
             .eq('identificador', productoId)
-            .select('identificador, disponible, revisor, descripcioncatalogo, seguro, confirmacion_duenio, preciobase_asignado, comision_asignada, subasta_asignada')
+            .select('identificador, disponible, revisor, descripcioncatalogo, seguro')
             .maybeSingle();
 
         if (error) {
@@ -194,10 +220,46 @@ const evaluarProducto = async ({ id, payload }) => {
             throw new AppError('Producto no encontrado', 404);
         }
 
+        if (disponible === 'si') {
+            const { data: existingItem } = await supabaseAdmin
+                .from('itemscatalogo')
+                .select('identificador')
+                .eq('producto', productoId)
+                .maybeSingle();
+
+            if (existingItem) {
+                const { error: updateItemError } = await supabaseAdmin
+                    .from('itemscatalogo')
+                    .update({
+                        catalogo: resolvedCatalogoId,
+                        preciobase,
+                        comision,
+                        subastado: 'no'
+                    })
+                    .eq('identificador', existingItem.identificador);
+
+                if (updateItemError) {
+                    throw new AppError('Error al actualizar ítem de catálogo: ' + updateItemError.message, 500);
+                }
+            } else {
+                const { error: insertItemError } = await supabaseAdmin
+                    .from('itemscatalogo')
+                    .insert({
+                        catalogo: resolvedCatalogoId,
+                        producto: productoId,
+                        preciobase,
+                        comision,
+                        subastado: 'no'
+                    });
+
+                if (insertItemError) {
+                    throw new AppError('Error al crear ítem de catálogo: ' + insertItemError.message, 500);
+                }
+            }
+        }
+
         return {
-            mensaje: disponible === 'si'
-                ? 'Producto evaluado exitosamente. Pendiente de confirmación del dueño.'
-                : 'Producto rechazado',
+            mensaje: 'Estado del producto actualizado',
             producto_id: String(data.identificador),
             disponible: data.disponible,
             revisor: data.revisor,
@@ -205,8 +267,7 @@ const evaluarProducto = async ({ id, payload }) => {
             seguro: data.seguro,
             preciobase: disponible === 'si' ? preciobase : null,
             comision: disponible === 'si' ? comision : null,
-            subasta_id: disponible === 'si' ? subastaId : null,
-            confirmacion_duenio: data.confirmacion_duenio
+            subasta_id: disponible === 'si' ? subastaId : null
         };
     }
 
@@ -216,24 +277,46 @@ const evaluarProducto = async ({ id, payload }) => {
         throw new AppError('Producto no encontrado', 404);
     }
 
+    producto.disponible = disponible;
     producto.revisor = revisor;
     producto.descripcioncatalogo = descripcioncatalogo;
     producto.seguro = seguro;
 
     if (disponible === 'si') {
-        producto.preciobase_asignado = preciobase;
-        producto.comision_asignada = comision;
-        producto.subasta_asignada = subastaId;
-        producto.confirmacion_duenio = 'pendiente';
-    } else {
-        producto.disponible = 'no';
-        producto.confirmacion_duenio = 'rechazado';
+        const catalogos = store.catalogos || [];
+        const catalogo = catalogos.find((c) => Number(c.subasta) === Number(subastaId));
+        if (!catalogo) {
+            const err = new AppError('La subasta no tiene un catálogo asociado', 400);
+            err.codigo = 'DATOS_INVALIDOS';
+            throw err;
+        }
+
+        const items = store.itemscatalogo || [];
+        const existingIdx = items.findIndex((i) => String(i.producto) === String(productoId));
+        if (existingIdx >= 0) {
+            items[existingIdx] = {
+                ...items[existingIdx],
+                catalogo: catalogo.id,
+                preciobase,
+                comision,
+                subastado: 'no'
+            };
+        } else {
+            const itemId = nextId('i', 'item');
+            items.push({
+                id: itemId,
+                catalogo: catalogo.id,
+                producto: productoId,
+                preciobase,
+                comision,
+                subastado: 'no'
+            });
+        }
+        store.itemscatalogo = items;
     }
 
     return {
-        mensaje: disponible === 'si'
-            ? 'Producto evaluado exitosamente. Pendiente de confirmación del dueño.'
-            : 'Producto rechazado',
+        mensaje: 'Estado del producto actualizado',
         producto_id: String(producto.id),
         disponible: producto.disponible,
         revisor: producto.revisor,
@@ -241,8 +324,7 @@ const evaluarProducto = async ({ id, payload }) => {
         seguro: producto.seguro,
         preciobase: disponible === 'si' ? preciobase : null,
         comision: disponible === 'si' ? comision : null,
-        subasta_id: disponible === 'si' ? subastaId : null,
-        confirmacion_duenio: producto.confirmacion_duenio
+        subasta_id: disponible === 'si' ? subastaId : null
     };
 };
 
@@ -321,7 +403,7 @@ const crearSubasta = async ({ payload }) => {
     }
 
     if (isConfigured) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('subastas')
             .insert({
                 nombre: String(nombre).trim(),
@@ -344,7 +426,7 @@ const crearSubasta = async ({ payload }) => {
         }
 
         const catalogoNombre = String(nombre).trim();
-        const { data: responsable, error: respError } = await supabase
+        const { data: responsable, error: respError } = await supabaseAdmin
             .from('empleados')
             .select('identificador')
             .ilike('cargo', '%resp%')
@@ -355,7 +437,7 @@ const crearSubasta = async ({ payload }) => {
             throw new AppError('Error al obtener responsable: ' + respError.message, 500);
         }
 
-        const { data: catalogo, error: catError } = await supabase
+        const { data: catalogo, error: catError } = await supabaseAdmin
             .from('catalogos')
             .insert({
                 descripcion: catalogoNombre,
@@ -435,7 +517,7 @@ const crearSubasta = async ({ payload }) => {
 
 const listarClientesPendientes = async () => {
     if (isConfigured) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('clientes')
             .select('identificador, admitido, categoria, numeropais, personas (nombre, documento, email)')
             .is('admitido', null)
@@ -445,38 +527,70 @@ const listarClientesPendientes = async () => {
             throw new AppError('Error al obtener clientes: ' + error.message, 500);
         }
 
-        return (data || []).map((cliente) => ({
-            cliente_id: cliente.identificador,
-            nombre: cliente.personas?.nombre || null,
-            documento: cliente.personas?.documento || null,
-            email: cliente.personas?.email || null,
-            admitido: cliente.admitido || 'no',
-            categoria: cliente.categoria || null,
-            numeropais: cliente.numeropais || null
-        }));
+        const clienteIds = (data || []).map(c => c.identificador).filter(Boolean);
+        let mediosPagoMap = new Map();
+
+        if (clienteIds.length) {
+            const { data: medios, error: mediosError } = await supabaseAdmin
+                .from('mediosdepago')
+                .select('identificador, cliente_id, tipo, detalles_enmascarados, verificado, es_principal')
+                .in('cliente_id', clienteIds)
+                .order('identificador', { ascending: true });
+
+            for (const medio of medios || []) {
+                mediosPagoMap.set(medio.cliente_id, medio);
+            }
+        }
+
+        return (data || []).map((cliente) => {
+            const medio = mediosPagoMap.get(cliente.identificador);
+            return {
+                cliente_id: cliente.identificador,
+                nombre: cliente.personas?.nombre || null,
+                documento: cliente.personas?.documento || null,
+                email: cliente.personas?.email || null,
+                admitido: cliente.admitido || 'no',
+                categoria: cliente.categoria || null,
+                numeropais: cliente.numeropais || null,
+                medio_pago: medio ? {
+                    id: medio.identificador,
+                    tipo: medio.tipo,
+                    descripcion: medio.detalles_enmascarados,
+                    verificado: medio.verificado
+                } : null
+            };
+        });
     }
 
     const usuarios = Array.isArray(store.users) ? store.users : [];
     return usuarios
         .filter((u) => String(u.estado_validacion || '').toUpperCase() === 'EN_REVISION')
-        .map((u) => ({
-            cliente_id: u.id,
-            nombre: u.nombre_completo || u.nombre || null,
-            documento: u.documento || null,
-            email: u.email || null,
-            admitido: u.estado_validacion === 'APROBADO' ? 'si' : 'no',
-            categoria: u.categoria || null,
-            numeropais: u.pais_residencia || null
-        }));
+        .map((u) => {
+            const medio = (u.medios_pago || []).find(m => m.es_principal === 'si') || (u.medios_pago || [])[0] || null;
+            return {
+                cliente_id: u.id,
+                nombre: u.nombre_completo || u.nombre || null,
+                documento: u.documento || null,
+                email: u.email || null,
+                admitido: u.estado_validacion === 'APROBADO' ? 'si' : 'no',
+                categoria: u.categoria || null,
+                numeropais: u.pais_residencia || null,
+                medio_pago: medio ? {
+                    id: medio.id,
+                    tipo: medio.tipo,
+                    descripcion: medio.detalles_enmascarados || medio.descripcion,
+                    verificado: medio.verificado || 'no'
+                } : null
+            };
+        });
 };
 
 const listarProductosPendientes = async () => {
     if (isConfigured) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('productos')
-            .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio, preciosugerido, confirmacion_duenio, preciobase_asignado, comision_asignada, subasta_asignada')
+            .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio, preciosugerido')
             .is('disponible', null)
-            .is('confirmacion_duenio', null)
             .order('identificador', { ascending: true });
 
         if (error) {
@@ -488,7 +602,7 @@ const listarProductosPendientes = async () => {
         let fotosMap = new Map();
 
         if (productoIds.length) {
-            const { data: items, error: itemsError } = await supabase
+            const { data: items, error: itemsError } = await supabaseAdmin
                 .from('itemscatalogo')
                 .select('producto, preciobase, comision')
                 .in('producto', productoIds);
@@ -503,7 +617,7 @@ const listarProductosPendientes = async () => {
                 }
             }
 
-            const { data: fotos, error: fotosError } = await supabase
+            const { data: fotos, error: fotosError } = await supabaseAdmin
                 .from('fotos')
                 .select('producto, foto_url')
                 .in('producto', productoIds);
@@ -558,7 +672,7 @@ const listarProductosPendientes = async () => {
 
 const listarClientesRechazados = async () => {
     if (isConfigured) {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
             .from('clientes')
             .select('identificador, admitido, categoria, numeropais, personas (nombre, documento, email)')
             .eq('admitido', 'no')
@@ -603,7 +717,7 @@ const listarSubastas = async () => {
         }));
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('subastas')
         .select('identificador, nombre, fecha, estado, tematica')
         .order('fecha', { ascending: false });
@@ -632,7 +746,7 @@ const listarCatalogosPorSubasta = async ({ subastaId }) => {
         }));
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('catalogos')
         .select('identificador, descripcion, subasta, responsable')
         .eq('subasta', id)
@@ -668,7 +782,7 @@ const crearCatalogo = async ({ payload }) => {
         return { id, descripcion, subasta: subastaId, responsable };
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('catalogos')
         .insert({
             descripcion,
@@ -708,7 +822,7 @@ const obtenerOpcionesAdmin = async () => {
 
     const { data: rData, error: rError } = await revisoresQuery;
     if (rError && /column .*nombre/i.test(rError.message || '')) {
-        const { data: fallback, error: fbError } = await supabase
+        const { data: fallback, error: fbError } = await supabaseAdmin
             .from('empleados')
             .select('identificador, cargo')
             .ilike('cargo', '%revisor%');
@@ -722,7 +836,7 @@ const obtenerOpcionesAdmin = async () => {
 
     const { data: eData, error: eError } = await empleadosQuery;
     if (eError && /column .*nombre/i.test(eError.message || '')) {
-        const { data: fallback, error: fbError } = await supabase
+        const { data: fallback, error: fbError } = await supabaseAdmin
             .from('empleados')
             .select('identificador, cargo')
             .ilike('cargo', '%resp%');
@@ -746,14 +860,154 @@ const obtenerOpcionesAdmin = async () => {
     };
 };
 
+const evaluarMedioPago = async ({ id, payload }) => {
+    const medioId = parseIdNumber(id);
+    if (!medioId) throw new AppError('Medio de pago no encontrado', 404);
+
+    const verificado = normalizeLower(payload?.verificado);
+    if (!SI_NO.includes(verificado)) {
+        const err = new AppError('Datos inválidos', 400);
+        err.codigo = 'DATOS_INVALIDOS';
+        throw err;
+    }
+
+    if (isConfigured) {
+        // Si se rechaza el medio de pago, también rechazamos al cliente
+        if (verificado === 'no') {
+            const { data: medio } = await supabaseAdmin
+                .from('mediosdepago')
+                .select('cliente_id')
+                .eq('identificador', medioId)
+                .maybeSingle();
+
+            if (medio?.cliente_id) {
+                await supabaseAdmin
+                    .from('clientes')
+                    .update({ admitido: 'no', categoria: null })
+                    .eq('identificador', medio.cliente_id);
+            }
+        }
+
+        const { data, error } = await supabaseAdmin
+            .from('mediosdepago')
+            .update({ verificado })
+            .eq('identificador', medioId)
+            .select('identificador, verificado, cliente_id')
+            .maybeSingle();
+
+        if (error) throw new AppError('Error al actualizar medio de pago: ' + error.message, 500);
+        if (!data) throw new AppError('Medio de pago no encontrado', 404);
+
+        return {
+            mensaje: 'Medio de pago evaluado exitosamente',
+            medio_id: String(data.identificador),
+            verificado: data.verificado,
+            cliente_id: String(data.cliente_id)
+        };
+    }
+
+    // fallback local (data.store)
+    const users = store.users || [];
+    for (const user of users) {
+        const medio = (user.medios_pago || []).find(m => String(m.id) === String(medioId));
+        if (medio) {
+            medio.verificado = verificado;
+            if (verificado === 'no') {
+                user.estado_validacion = 'RECHAZADO';
+                user.categoria = null;
+                user.bloqueado = true;
+            }
+            return { mensaje: 'Medio de pago evaluado exitosamente', medio_id: String(medioId), verificado };
+        }
+    }
+    throw new AppError('Medio de pago no encontrado', 404);
+};
+
+/**
+ * Lista todos los medios de pago principales con verificado = null (pendientes de revisión).
+ * Incluye datos básicos del cliente para contexto.
+ */
+const listarMediosPagoPendientes = async () => {
+    if (isConfigured) {
+        const { data, error } = await supabaseAdmin
+            .from('mediosdepago')
+            .select('identificador, cliente_id, tipo, detalles_enmascarados, verificado, es_principal')
+            .is('verificado', null)
+            .order('identificador', { ascending: true });
+
+        if (error) {
+            throw new AppError('Error al obtener medios de pago: ' + error.message, 500);
+        }
+
+        const clienteIds = [...new Set((data || []).map(m => m.cliente_id).filter(Boolean))];
+        let personasMap = new Map();
+
+        if (clienteIds.length) {
+            const { data: clientes } = await supabaseAdmin
+                .from('clientes')
+                .select('identificador, admitido, personas (nombre, email, documento)')
+                .in('identificador', clienteIds);
+
+            for (const c of clientes || []) {
+                personasMap.set(c.identificador, {
+                    nombre: c.personas?.nombre || null,
+                    email: c.personas?.email || null,
+                    documento: c.personas?.documento || null,
+                    admitido: c.admitido
+                });
+            }
+        }
+
+        return (data || []).map((medio) => {
+            const persona = personasMap.get(medio.cliente_id) || {};
+            return {
+                medio_id: medio.identificador,
+                cliente_id: medio.cliente_id,
+                nombre: persona.nombre || null,
+                email: persona.email || null,
+                documento: persona.documento || null,
+                tipo: medio.tipo,
+                descripcion: medio.detalles_enmascarados,
+                verificado: medio.verificado,
+                admitido_cliente: persona.admitido
+            };
+        });
+    }
+
+    // fallback local
+    const usuarios = Array.isArray(store.users) ? store.users : [];
+    const resultado = [];
+    for (const user of usuarios) {
+        const mediosPendientes = (user.medios_pago || []).filter(
+            m => m.verificado === null || m.verificado === undefined || m.verificado === 'no'
+        );
+        for (const medio of mediosPendientes) {
+            resultado.push({
+                medio_id: medio.id,
+                cliente_id: user.id,
+                nombre: user.nombre_completo || user.nombre || null,
+                email: user.email || null,
+                documento: user.documento || null,
+                tipo: medio.tipo,
+                descripcion: medio.detalles_enmascarados || medio.descripcion,
+                verificado: medio.verificado || null,
+                admitido_cliente: user.estado_validacion === 'APROBADO' ? 'si' : 'no'
+            });
+        }
+    }
+    return resultado;
+};
+
 module.exports = {
     evaluarCliente,
     evaluarProducto,
+    evaluarMedioPago,
     crearSubasta,
     subirPortadaSubasta,
     listarClientesPendientes,
     listarProductosPendientes,
     listarClientesRechazados,
+    listarMediosPagoPendientes,
     obtenerOpcionesAdmin,
     listarSubastas,
     listarCatalogosPorSubasta,

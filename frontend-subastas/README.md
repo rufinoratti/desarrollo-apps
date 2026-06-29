@@ -1,94 +1,97 @@
-# Frontend Subastas (REMATIX)
+# Rematix Frontend
 
-App en Expo + Expo Router con flujo de autenticacion/registro y pantallas de subastas.
+App mobile de **Rematix**, plataforma de subastas de lujo. Construida con **Expo** + **Expo Router**.
 
-## Requisitos
+## 🚀 Tecnologías
 
-- Node.js + npm
-- Expo CLI (via `npx expo`)
+- **Framework:** React Native 0.81 + Expo SDK 54
+- **Routing:** Expo Router (file-based)
+- **Navegación:** React Navigation
+- **Estado:** Context API (AuthContext, RegistrationContext)
+- **Testing:** Jest + React Native Testing Library
+- **Linting:** ESLint (expo config)
 
-## Como iniciar
+## 📦 Requisitos
 
-1. Instalar dependencias del frontend
+- Node.js >= 18
+- npm o pnpm
+- Expo CLI (`npx expo`)
+- Expo Go (en dispositivo físico) o emulador (iOS/Android)
+
+## 🔧 Puesta en marcha local
+
+1. Clonar el repositorio y entrar al directorio:
+
+```bash
+git clone https://github.com/rufinoratti/desarrollo-apps.git
+cd desarrollo-apps/frontend-subastas
+```
+
+2. Instalar dependencias:
 
 ```bash
 npm install
 ```
 
-2. Iniciar el mock server (API local)
+3. Configurar la URL de la API:
 
-```bash
-npm run mock
+Editar el archivo `.env` en la raíz del proyecto:
+
+```env
+EXPO_PUBLIC_API_URL=https://desarrollo-apps-zq82.onrender.com
 ```
 
-El mock server corre en `http://0.0.0.0:3000`.
+> Para desarrollo local con el backend corriendo en tu máquina, usar la IP local:
+> ```env
+> EXPO_PUBLIC_API_URL=http://xx.xx.xx.xx:3000
+> ```
 
-3. Configurar URL de API para el frontend
-
-La app usa `EXPO_PUBLIC_API_URL` (si no esta seteada, usa el default definido en `src/config/env.ts`).
-
-Ejemplo (recomendado):
-
-```bash
-export EXPO_PUBLIC_API_URL="http://TU_IP_LOCAL:3000"
-```
-
-Notas:
-
-- En dispositivo fisico, `TU_IP_LOCAL` debe ser la IP de tu computadora en la red.
-- En iOS Simulator normalmente funciona `http://localhost:3000`.
-- En Android emulator suele ser `http://10.0.2.2:3000`.
-
-4. Iniciar la app
+4. Iniciar la app:
 
 ```bash
 npm run start
 ```
 
-## Scripts
+Escanea el QR con Expo Go o presiona `a` (Android) / `i` (iOS) para abrir en el emulador.
 
-- `npm run start`: arranca Expo
-- `npm run android`: abre en Android
-- `npm run ios`: abre en iOS
-- `npm run web`: abre en web
-- `npm run lint`: ESLint
-- `npm run test`: Jest
-- `npm run mock`: mock server (Express)
+## 📋 Scripts
 
-## Estructura del proyecto
+| Comando | Descripción |
+|---|---|
+| `npm run start` | Inicia Expo dev server |
+| `npm run android` | Abre en Android emulator |
+| `npm run ios` | Abre en iOS simulator |
+| `npm run web` | Abre en navegador web |
+| `npm run lint` | Ejecuta ESLint |
+| `npm run test` | Ejecuta Jest |
 
-- `app/`: rutas (Expo Router)
-- `app/_layout.tsx`: providers globales + Stack
-- `app/index.tsx`: splash que redirige a `(tabs)` o `(auth)` segun token
-- `app/(auth)/`: onboarding, login, registro (pasos)
-- `app/(tabs)/`: tabs principales (inicio, subastas, pujas, perfil, etc)
-- `app/catalogo/[id].tsx`: catalogo de una subasta
-- `src/components/`: UI reutilizable (`Button`, `Input`, `Select`)
-- `src/context/`: `AuthContext` (token, redirect) y `RegistrationContext`
-- `src/config/env.ts`: configuracion centralizada (API_URL)
-- `mock-server/`: servidor Express con endpoints mock
+## 🌐 Hosting
 
-## Endpoints mock incluidos
+El frontend se sirve a través de **Expo** y se conecta al backend hosteado en Render:
 
-- `POST /auth/login`
-- `POST /auth/registro/paso1`
-- `POST /auth/registro/paso2`
-- `POST /auth/registro/paso3` (multipart)
-- `POST /auth/registro/paso4-pago`
-- `GET /paises`
-- `GET /bancos`
-- `GET /categorias` (requiere auth)
-- `GET /subastas` (requiere auth)
-- `GET /subastas/:id/catalogo` (requiere auth)
-- `GET /perfil` y `PUT /perfil` (requiere auth)
-- `GET /perfil/restricciones` (requiere auth)
+- **Backend:** [https://desarrollo-apps-zq82.onrender.com](https://desarrollo-apps-zq82.onrender.com)
 
-## Credenciales mock
+## 📁 Estructura
+
+```
+frontend-subastas/
+├── app/                  # Rutas (Expo Router)
+│   ├── _layout.tsx       # Layout global con providers
+│   ├── index.tsx         # Splash / redirección
+│   ├── (auth)/           # Onboarding, login, registro
+│   └── (tabs)/           # Tabs principales
+├── src/
+│   ├── components/       # UI reutilizable (Button, Input, Select)
+│   ├── context/          # AuthContext, RegistrationContext
+│   └── config/           # Configuración (env.ts)
+├── assets/               # Imágenes, fuentes
+├── __tests__/            # Tests
+├── .env
+└── package.json
+```
+
+## 🔐 Credenciales de prueba (mock local)
 
 - Email: `usuario@mail.com`
 - Password: `MiClave123!`
-
-## Notas de desarrollo
-
-- El token mock valido es `mock-jwt-token`.
-- Si estas sin token y entras a una ruta privada, `AuthContext` redirige a `/(auth)/login`.
+- Token mock: `mock-jwt-token`

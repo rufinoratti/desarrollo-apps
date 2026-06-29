@@ -30,7 +30,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { store, nextId } = require('./data.store');
 const AppError = require('../utils/appError');
-const { supabase, isConfigured } = require('../config/supabase');
+const { supabase, supabaseAdmin, isConfigured } = require('../config/supabase');
 const storage = require('../config/storage');
 
 // ============================================================
@@ -557,7 +557,7 @@ const paso4Registro = async (payload) => {
         if (registro.dni_frente) fotoData.dni_frente = registro.dni_frente;
         if (registro.dni_dorso) fotoData.dni_dorso = registro.dni_dorso;
 
-        const { data: persona, error: personaError } = await supabase
+        const { data: persona, error: personaError } = await supabaseAdmin
             .from('personas')
             .insert({
                 documento: registro.documento,
@@ -578,7 +578,7 @@ const paso4Registro = async (payload) => {
         const personaId = persona.identificador;
 
         // Luego crear el cliente vinculado a la persona
-        const { data: cliente, error: clienteError } = await supabase
+        const { data: cliente, error: clienteError } = await supabaseAdmin
             .from('clientes')
             .insert({
                 identificador: personaId,
@@ -596,13 +596,13 @@ const paso4Registro = async (payload) => {
         const billeteraService = require('./billetera.service');
         const parsedMedio = billeteraService.parsePayloadMedio({ tipo_pago, detalles, moneda: 'ARS' });
 
-        const { error: medioError } = await supabase
+        const { error: medioError } = await supabaseAdmin
             .from('mediosdepago')
             .insert({
                 cliente_id: personaId,
                 tipo: parsedMedio.tipo,
                 entidad: parsedMedio.entidad,
-                verificado: 'si',
+                verificado: null,
                 es_principal: 'si',
                 detalles_enmascarados: parsedMedio.detalles_enmascarados,
                 moneda: parsedMedio.moneda,
