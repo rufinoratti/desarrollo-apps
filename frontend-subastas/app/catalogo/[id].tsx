@@ -1,3 +1,11 @@
+// catalogo/[id].tsx — Pantalla de detalle de subasta + catálogo + modal de puja
+// - Endpoints:
+// - GET /api/subastas/:id/catalogo?orden=&q= → artículos de la subasta con búsqueda y orden
+// - GET /api/items/:id/pujas → oferta actual + historial + postores de cada artículo
+// - POST /api/pujas → registrar una puja ({item_id, monto_ofertado})
+// - Funcionalidad general: Muestra el header de la subasta con sus metadatos y 
+// una grilla de artículos. Cada artículo muestra imagen, lote, oferta actual y botón PUJAR.
+// Al tocar PUJAR se abre un modal bottom sheet con la oferta actual, cantidad de postores, historial de últimas 3 pujas, input de monto y botón CONFIRMAR PUJA. El modal se actualiza en tiempo real vía polling cada 1 segundo. Si el usuario no tiene el nivel requerido, se muestra una pantalla de bloqueo con candado animado. También tiene búsqueda y ordenamiento del catálogo.
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
   Image, FlatList, TextInput, Modal, KeyboardAvoidingView, Platform, Alert, Animated
