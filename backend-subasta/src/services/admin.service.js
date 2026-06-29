@@ -803,18 +803,19 @@ const crearCatalogo = async ({ payload }) => {
 };
 
 const obtenerOpcionesAdmin = async () => {
+    
     if (!isConfigured) {
         return { revisores: [], empleados: [] };
     }
 
     let revisoresData, empleadosData;
 
-    const revisoresQuery = supabase
+    const revisoresQuery = supabaseAdmin
         .from('empleados')
         .select('identificador, cargo, nombre')
         .ilike('cargo', '%revisor%');
 
-    const empleadosQuery = supabase
+    const empleadosQuery = supabaseAdmin
         .from('empleados')
         .select('identificador, nombre, cargo')
         .ilike('cargo', '%resp%')

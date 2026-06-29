@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   headerBack: { width: 40 },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700', letterSpacing: 2 },
   scroll: { flex: 1, paddingHorizontal: 20 },
-  card: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 16 },
+  card: { backgroundColor: '#FFF', borderRadius: 12, padding: 20, marginBottom: 16 },
   sectionTitle: { fontSize: 12, fontWeight: '700', color: '#111', marginBottom: 4, letterSpacing: 1 },
   sectionSubtitle: { fontSize: 12, color: '#999', marginBottom: 16, lineHeight: 18 },
 
