@@ -527,8 +527,6 @@ const listarClientesPendientes = async () => {
             throw new AppError('Error al obtener clientes: ' + error.message, 500);
         }
 
-        console.log('[ADMIN] clientes pendientes encontrados:', data?.length, JSON.stringify(data?.map(c => c.identificador)));
-
         const clienteIds = (data || []).map(c => c.identificador).filter(Boolean);
         let mediosPagoMap = new Map();
 
@@ -539,9 +537,6 @@ const listarClientesPendientes = async () => {
                 .in('cliente_id', clienteIds)
                 .order('identificador', { ascending: true });
 
-            console.log('[ADMIN] medios error:', mediosError);
-            console.log('[ADMIN] medios encontrados:', medios?.length, JSON.stringify(medios));
-
             for (const medio of medios || []) {
                 mediosPagoMap.set(medio.cliente_id, medio);
             }
@@ -549,7 +544,6 @@ const listarClientesPendientes = async () => {
 
         return (data || []).map((cliente) => {
             const medio = mediosPagoMap.get(cliente.identificador);
-            console.log('[ADMIN] cliente', cliente.identificador, 'tipo:', typeof cliente.identificador, '→ medio:', medio ? 'encontrado' : 'NO encontrado');
             return {
                 cliente_id: cliente.identificador,
                 nombre: cliente.personas?.nombre || null,
@@ -809,18 +803,19 @@ const crearCatalogo = async ({ payload }) => {
 };
 
 const obtenerOpcionesAdmin = async () => {
+    
     if (!isConfigured) {
         return { revisores: [], empleados: [] };
     }
 
     let revisoresData, empleadosData;
 
-    const revisoresQuery = supabase
+    const revisoresQuery = supabaseAdmin
         .from('empleados')
         .select('identificador, cargo, nombre')
         .ilike('cargo', '%revisor%');
 
-    const empleadosQuery = supabase
+    const empleadosQuery = supabaseAdmin
         .from('empleados')
         .select('identificador, nombre, cargo')
         .ilike('cargo', '%resp%')

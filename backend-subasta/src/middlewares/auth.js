@@ -65,6 +65,7 @@ const authService = require('../services/auth.service');
  *      - Llama next(error) que lo maneja el middleware global de errores
  */
 const authMiddleware = (req, res, next) => {
+    
     const authHeader = req.headers.authorization;
 
     // Paso 1: Validar que el header Authorization exista
