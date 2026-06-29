@@ -342,6 +342,12 @@ export default function AdminPanel() {
       if (!res.ok) { Alert.alert('Error', 'No se pudo actualizar el producto.'); return; }
       setShowDetalleProducto(false);
       setPrecioBaseAprobar(''); setComisionAprobar(''); setSubastaIdAprobar(null); setSubastaLabelAprobar('');
+      Alert.alert(
+        disponible === 'si' ? 'Cotización enviada' : 'Producto rechazado',
+        disponible === 'si'
+          ? 'La cotización fue enviada al dueño para su confirmación.'
+          : 'El producto fue rechazado correctamente.'
+      );
       await cargarDatos();
     } catch { Alert.alert('Error', 'No se pudo actualizar el producto.'); }
   };

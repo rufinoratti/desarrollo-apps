@@ -180,36 +180,39 @@ const evaluarProducto = async ({ id, payload }) => {
     }
 
     if (isConfigured) {
+        let updatePayload;
+
         if (disponible === 'si') {
-            const { data: catalogoRow, error: catalogoError } = await supabaseAdmin
-                .from('catalogos')
-                .select('identificador')
-                .eq('subasta', subastaId)
-                .maybeSingle();
-
-            if (catalogoError) {
-                throw new AppError('Error al obtener catálogo: ' + catalogoError.message, 500);
-            }
-
-            if (!catalogoRow) {
-                const err = new AppError('La subasta no tiene un catálogo asociado', 400);
-                err.codigo = 'DATOS_INVALIDOS';
-                throw err;
-            }
-
-            resolvedCatalogoId = catalogoRow.identificador;
+            // El admin aprueba la cotización: el producto queda pendiente de confirmación por el dueño.
+            // No se toca itemscatalogo; el dueño decide si acepta o rechaza.
+            updatePayload = {
+                revisor,
+                descripcioncatalogo,
+                seguro,
+                preciobase_asignado: preciobase,
+                comision_asignada: comision,
+                subasta_asignada: subastaId,
+                confirmacion_duenio: 'pendiente'
+            };
+        } else {
+            // El admin rechaza: se marca como no disponible y se limpia cualquier cotización previa.
+            updatePayload = {
+                disponible: 'no',
+                revisor,
+                descripcioncatalogo,
+                seguro,
+                preciobase_asignado: null,
+                comision_asignada: null,
+                subasta_asignada: null,
+                confirmacion_duenio: null
+            };
         }
 
         const { data, error } = await supabaseAdmin
             .from('productos')
-            .update({
-                disponible,
-                revisor,
-                descripcioncatalogo,
-                seguro
-            })
+            .update(updatePayload)
             .eq('identificador', productoId)
-            .select('identificador, disponible, revisor, descripcioncatalogo, seguro')
+            .select('identificador, disponible, revisor, descripcioncatalogo, seguro, confirmacion_duenio')
             .maybeSingle();
 
         if (error) {
@@ -220,48 +223,13 @@ const evaluarProducto = async ({ id, payload }) => {
             throw new AppError('Producto no encontrado', 404);
         }
 
-        if (disponible === 'si') {
-            const { data: existingItem } = await supabaseAdmin
-                .from('itemscatalogo')
-                .select('identificador')
-                .eq('producto', productoId)
-                .maybeSingle();
-
-            if (existingItem) {
-                const { error: updateItemError } = await supabaseAdmin
-                    .from('itemscatalogo')
-                    .update({
-                        catalogo: resolvedCatalogoId,
-                        preciobase,
-                        comision,
-                        subastado: 'no'
-                    })
-                    .eq('identificador', existingItem.identificador);
-
-                if (updateItemError) {
-                    throw new AppError('Error al actualizar ítem de catálogo: ' + updateItemError.message, 500);
-                }
-            } else {
-                const { error: insertItemError } = await supabaseAdmin
-                    .from('itemscatalogo')
-                    .insert({
-                        catalogo: resolvedCatalogoId,
-                        producto: productoId,
-                        preciobase,
-                        comision,
-                        subastado: 'no'
-                    });
-
-                if (insertItemError) {
-                    throw new AppError('Error al crear ítem de catálogo: ' + insertItemError.message, 500);
-                }
-            }
-        }
-
         return {
-            mensaje: 'Estado del producto actualizado',
+            mensaje: disponible === 'si'
+                ? 'Cotización enviada al dueño para confirmación'
+                : 'Producto rechazado',
             producto_id: String(data.identificador),
             disponible: data.disponible,
+            confirmacion_duenio: data.confirmacion_duenio,
             revisor: data.revisor,
             descripcioncatalogo: data.descripcioncatalogo,
             seguro: data.seguro,
@@ -277,48 +245,31 @@ const evaluarProducto = async ({ id, payload }) => {
         throw new AppError('Producto no encontrado', 404);
     }
 
-    producto.disponible = disponible;
     producto.revisor = revisor;
     producto.descripcioncatalogo = descripcioncatalogo;
     producto.seguro = seguro;
 
     if (disponible === 'si') {
-        const catalogos = store.catalogos || [];
-        const catalogo = catalogos.find((c) => Number(c.subasta) === Number(subastaId));
-        if (!catalogo) {
-            const err = new AppError('La subasta no tiene un catálogo asociado', 400);
-            err.codigo = 'DATOS_INVALIDOS';
-            throw err;
-        }
-
-        const items = store.itemscatalogo || [];
-        const existingIdx = items.findIndex((i) => String(i.producto) === String(productoId));
-        if (existingIdx >= 0) {
-            items[existingIdx] = {
-                ...items[existingIdx],
-                catalogo: catalogo.id,
-                preciobase,
-                comision,
-                subastado: 'no'
-            };
-        } else {
-            const itemId = nextId('i', 'item');
-            items.push({
-                id: itemId,
-                catalogo: catalogo.id,
-                producto: productoId,
-                preciobase,
-                comision,
-                subastado: 'no'
-            });
-        }
-        store.itemscatalogo = items;
+        // Guardar cotización y dejar al dueño confirmar.
+        producto.preciobase_asignado = preciobase;
+        producto.comision_asignada = comision;
+        producto.subasta_asignada = subastaId;
+        producto.confirmacion_duenio = 'pendiente';
+    } else {
+        producto.disponible = 'no';
+        producto.preciobase_asignado = null;
+        producto.comision_asignada = null;
+        producto.subasta_asignada = null;
+        producto.confirmacion_duenio = null;
     }
 
     return {
-        mensaje: 'Estado del producto actualizado',
+        mensaje: disponible === 'si'
+            ? 'Cotización enviada al dueño para confirmación'
+            : 'Producto rechazado',
         producto_id: String(producto.id),
         disponible: producto.disponible,
+        confirmacion_duenio: producto.confirmacion_duenio,
         revisor: producto.revisor,
         descripcioncatalogo: producto.descripcioncatalogo,
         seguro: producto.seguro,
@@ -591,6 +542,7 @@ const listarProductosPendientes = async () => {
             .from('productos')
             .select('identificador, descripcioncatalogo, descripcioncompleta, disponible, revisor, seguro, duenio, preciosugerido')
             .is('disponible', null)
+            .is('confirmacion_duenio', null)
             .order('identificador', { ascending: true });
 
         if (error) {
@@ -654,7 +606,7 @@ const listarProductosPendientes = async () => {
 
     const productos = Array.isArray(store.productos) ? store.productos : [];
     return productos
-        .filter((p) => p.disponible === null || p.disponible === undefined)
+        .filter((p) => (p.disponible === null || p.disponible === undefined) && !p.confirmacion_duenio)
         .map((p) => ({
             producto_id: p.id,
             descripcioncatalogo: p.descripcioncatalogo || p.descripcion || null,

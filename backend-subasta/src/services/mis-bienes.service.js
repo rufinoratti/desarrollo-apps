@@ -700,7 +700,9 @@ const retirarProducto = async ({ authUser, productoId }) => {
 
     // Eliminar seguro asociado
     if (seguroId) {
-        await supabase.from('seguros').delete().eq('nropoliza', seguroId).catch(() => {});
+        try {
+            await supabase.from('seguros').delete().eq('nropoliza', seguroId);
+        } catch { /* ignorar error si el seguro ya no existe */ }
     }
 
     return { mensaje: 'Producto eliminado permanentemente', eliminado: true };
