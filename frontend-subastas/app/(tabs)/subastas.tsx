@@ -1,3 +1,12 @@
+// subastas.tsx — Pantalla de listado de subastas (Tab "Subastas")
+// - Endpoints:
+// - GET /api/categorias → lista de categorías para los chips de filtro
+// - GET /api/subastas?pagina=&limite=&tematica= → subastas paginadas con filtro
+// - Funcionalidad general: Muestra un FlatList con cards de subastas, 
+// ordenadas por estado (EN VIVO primero). Cada card tiene imagen, 
+// título, cantidad de artículos, ubicación, badge de estado con animación, countdown,
+//  y verificación de nivel de acceso. Tiene filtro por categoría (chips horizontales), búsqueda por texto, pull-to-refresh y scroll infinito.
+//  Las subastas bloqueadas por nivel se ven borrosas con candado.
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Image, FlatList, TextInput, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -9,27 +18,27 @@ import CountdownBadge from '@/src/components/CountdownBadge';
 import { Skeleton, SkeletonList } from '@/src/components/Skeleton';
 import { rankOf } from '@/src/utils/rankCategory';
 
+
 interface Categoria {
   id: number;
   nombre: string;
 }
 
-
-
 interface SubastaItem {
   id?: string | number;
   subasta_id?: string;
   titulo: string;
-  imagen_portada: string;
-  cantidad_articulos: number;
-  ubicacion: string;
-  estado: string;
-  nivel_requerido: string;
-  categoria_id: number;
-  fecha_inicio?: string;
-  fecha_fin?: string;
+  imagen_portada: string;       // URL de la imagen de portada
+  cantidad_articulos: number;   // Cantidad de lotes/artículos
+  ubicacion: string;            // Ubicación física de la subasta
+  estado: string;               // Estado crudo desde backend
+  nivel_requerido: string;      // Nivel mínimo para acceder (ej: "Plata")
+  categoria_id: number;         // FK a categoría
+  fecha_inicio?: string;        // Fecha ISO de inicio
+  fecha_fin?: string;           // Fecha ISO de fin
 }
 
+// Función: calcular estado visual de la subasta
 function getDisplayStatus(item: SubastaItem): string {
   const estadoLower = String(item.estado).toLowerCase();
   if (estadoLower === 'cerrada' || estadoLower === 'finalizada') return 'FINALIZADA';
@@ -41,6 +50,11 @@ function getDisplayStatus(item: SubastaItem): string {
   return 'EN VIVO';
 }
 
+// ───────────────────────────────────────────────────────────
+// Ordenamiento de subastas
+// ───────────────────────────────────────────────────────────
+// Prioridad: EN VIVO (0) > PRÓXIMAMENTE (1) > FINALIZADA (2)
+// Dentro del mismo estado, ordena por fecha_inicio ascendente
 const STATUS_ORDER: Record<string, number> = { 'EN VIVO': 0, 'PRÓXIMAMENTE': 1, 'FINALIZADA': 2 };
 
 function sortSubastas(list: SubastaItem[]): SubastaItem[] {
@@ -90,34 +104,40 @@ function StatusBadge({ estado }: { estado: string }) {
   );
 }
 
+// ───────────────────────────────────────────────────────────
+// Componente principal: Pantalla de listado de subastas
+// ───────────────────────────────────────────────────────────
 export default function SubastasScreen() {
   const { token, nivel, removeToken } = useAuth();
-  const [categorias, setCategorias] = useState<Categoria[]>([]);
-  const [subastas, setSubastas] = useState<SubastaItem[]>([]);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<number | null>(null);
-  const [pagina, setPagina] = useState(1);
-  const [cargando, setCargando] = useState(true);
-  const [cargandoMas, setCargandoMas] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [busquedaVisible, setBusquedaVisible] = useState(false);
-  const [textoBusqueda, setTextoBusqueda] = useState('');
-  const inputRef = useRef<TextInput>(null);
 
+  const [categorias, setCategorias] = useState<Categoria[]>([]);       // Lista de categorías para el filtro
+  const [subastas, setSubastas] = useState<SubastaItem[]>([]);        // Lista de subastas a mostrar
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<number | null>(null); // Filtro activo
+  const [pagina, setPagina] = useState(1);                             // Página actual (paginación)
+  const [cargando, setCargando] = useState(true);                     // Loading inicial
+  const [cargandoMas, setCargandoMas] = useState(false);              // Loading de más páginas
+  const [refreshing, setRefreshing] = useState(false);                // Pull-to-refresh
+  const [totalPaginas, setTotalPaginas] = useState(1);                // Total de páginas disponibles
+  const [busquedaVisible, setBusquedaVisible] = useState(false);      // Toggle barra de búsqueda
+  const [textoBusqueda, setTextoBusqueda] = useState('');             // Texto de búsqueda
+  const inputRef = useRef<TextInput>(null);                           // Ref para auto-focus del input
+
+  // fetchCategorias: GET /api/categorias
   const fetchCategorias = async () => {
     try {
       const res = await fetch(`${API_URL}/api/categorias`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 401) { removeToken(); return; }
+      if (res.status === 401) { removeToken(); return; }  // Token expirado → logout
       if (!res.ok) return;
       const data = await res.json();
       setCategorias(data);
     } catch {
-      // Silencioso
+      // Silencioso - error de red
     }
   };
 
+  // fetchSubastas: GET /api/subastas?pagina=&limite=&tematica=
   const fetchSubastas = async (pag: number, catId: number | null, append: boolean) => {
     if (pag === 1) setCargando(true); else setCargandoMas(true);
     try {
@@ -129,8 +149,11 @@ export default function SubastasScreen() {
       if (res.status === 401) { removeToken(); return; }
       if (!res.ok) return;
       const data = await res.json();
-      setTotalPaginas(data.total_paginas);
-      setSubastas(prev => append ? sortSubastas([...prev, ...data.subastas]) : sortSubastas(data.subastas));
+      setTotalPaginas(data.total_paginas);        // Guarda total para saber si hay más
+      setSubastas(prev => append
+        ? sortSubastas([...prev, ...data.subastas])  // Agrega al final (scroll infinito)
+        : sortSubastas(data.subastas)                 // Reemplaza (filtro/refresh)
+      );
     } catch {
       // Silencioso
     } finally {
@@ -140,28 +163,32 @@ export default function SubastasScreen() {
     }
   };
 
+
   useEffect(() => {
     if (token) {
-      fetchCategorias();
-      fetchSubastas(1, null, false);
+      fetchCategorias();           
+      fetchSubastas(1, null, false); 
     }
-    // fetchCategorias/fetchSubastas intentionally not in deps to avoid ref churn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token]); 
+
 
   const handleCategoriaPress = (catId: number | null) => {
     setCategoriaSeleccionada(catId);
     setPagina(1);
-    fetchSubastas(1, catId, false);
+    fetchSubastas(1, catId, false); 
   };
 
   const handleLoadMore = () => {
     if (cargandoMas || pagina >= totalPaginas) return;
     const nextPage = pagina + 1;
     setPagina(nextPage);
-    fetchSubastas(nextPage, categoriaSeleccionada, true);
+    fetchSubastas(nextPage, categoriaSeleccionada, true); 
   };
 
+  // ─────────────────────────────────────────────────────
+  // handleRefresh: Pull-to-refresh
+  // Recarga desde página 1 manteniendo el filtro actual
+  // ─────────────────────────────────────────────────────
   const handleRefresh = () => {
     setRefreshing(true);
     setPagina(1);
@@ -179,7 +206,15 @@ export default function SubastasScreen() {
 
   const nivelActual = rankOf(nivel || 'base');
 
+  // ─────────────────────────────────────────────────────
+  // SubastaCard: Componente que renderiza cada card de subasta
+  // - Animación de entrada: fade-in + slide-up escalonada
+  // - Verifica si el usuario tiene nivel suficiente
+  // - Si está bloqueada: imagen borrosa + candado + overlay
+  // - Si no: muestra StatusBadge + CountdownBadge
+  // ─────────────────────────────────────────────────────
   function SubastaCard({ item, index }: { item: SubastaItem; index: number }) {
+    // Animaciones: fade desde 0→1, slide desde 24→0
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(24)).current;
     const estado = getDisplayStatus(item);
@@ -195,9 +230,10 @@ export default function SubastasScreen() {
       ]).start();
     }, );
 
+    // Obtiene nivel requerido del item (varios nombres posibles)
     const rawReq = (item as any).nivel_requerido ?? (item as any).nivel_acceso ?? (item as any).nivel ?? '';
     const nivelRequerido = rankOf(rawReq);
-    const bloqueada = nivelActual < nivelRequerido;
+    const bloqueada = nivelActual < nivelRequerido;  // True si el usuario no tiene acceso
 
     return (
       <Animated.View style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -217,14 +253,16 @@ export default function SubastasScreen() {
             source={{ uri: item.imagen_portada }}
             style={[styles.imagen, bloqueada && styles.imagenBloqueada]}
             resizeMode="cover"
-            blurRadius={bloqueada ? 6 : 0}
+            blurRadius={bloqueada ? 6 : 0} 
           />
+
           {bloqueada && (
             <View style={styles.overlayBloqueada}>
               <Ionicons name="lock-closed" size={32} color="#fff" />
               <Text style={styles.textoAcceso}>ACCESO {String(rawReq || 'COMUN').toUpperCase()} REQUERIDO</Text>
             </View>
           )}
+          {/* Badge de estado + countdown (solo si no está bloqueada) */}
           {!bloqueada && <StatusBadge estado={estado} />}
           {!bloqueada && (estado === 'EN VIVO' || estado === 'PRÓXIMAMENTE') && (
             <CountdownBadge
@@ -233,11 +271,14 @@ export default function SubastasScreen() {
             />
           )}
         </TouchableOpacity>
+
+        {/* Cuerpo de la card: título, subtítulo, botón */}
         <View style={styles.cardBody}>
           <Text style={styles.cardTitulo} numberOfLines={2}>{item.titulo}</Text>
           <Text style={styles.cardSubtitulo}>
             {item.cantidad_articulos} artículos — {item.ubicacion}
           </Text>
+          {/* Botón "VER CATÁLOGO" o "VER SUBASTA" si finalizó */}
           <TouchableOpacity
             style={[styles.botonCatalogo, bloqueada && styles.botonCatalogoDisabled]}
             onPress={() => {
@@ -263,6 +304,10 @@ export default function SubastasScreen() {
     return <ActivityIndicator size="small" color="#000" style={{ paddingVertical: 16 }} />;
   };
 
+  // ─────────────────────────────────────────────────────
+  // Estado de carga inicial (skeleton)
+  // Mientras carga la primera página, muestra placeholders
+  // ─────────────────────────────────────────────────────
   if (cargando && subastas.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -315,6 +360,7 @@ export default function SubastasScreen() {
         )}
       </View>
 
+      {/* ─── Filtro de categorías (chips horizontales) ─── */}
       <Text style={styles.sectionHeaderTitle}>CATEGORÍAS</Text>
       <ScrollView
         horizontal
@@ -322,12 +368,14 @@ export default function SubastasScreen() {
         style={styles.categoriasScroll}
         contentContainerStyle={styles.categoriasContent}
       >
+        {/* Chip "Todas" - activo cuando no hay filtro */}
         <TouchableOpacity
           style={[styles.pildora, !categoriaSeleccionada && styles.pildoraActiva]}
           onPress={() => handleCategoriaPress(null)}
         >
           <Text style={[styles.pildoraTexto, !categoriaSeleccionada && styles.pildoraTextoActivo]}>Todas</Text>
         </TouchableOpacity>
+        {/* Chips dinámicos desde GET /api/categorias */}
         {categorias.map((cat: any, index: number) => {
           const catId = cat?.identificador ?? cat?.id;
           return (
@@ -344,6 +392,7 @@ export default function SubastasScreen() {
         })}
       </ScrollView>
 
+      {/* ─── Lista de subastas (FlatList) ─── */}
       <Text style={styles.sectionTitle}>SUBASTAS ACTIVAS</Text>
 
       <FlatList
@@ -351,9 +400,9 @@ export default function SubastasScreen() {
         keyExtractor={(item, index) => String(item?.subasta_id ?? item?.id ?? index)}
         renderItem={({ item, index }) => <SubastaCard item={item} index={index} />}
         contentContainerStyle={styles.listContent}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={renderFooter}
+        onEndReached={handleLoadMore}         // Scroll infinito
+        onEndReachedThreshold={0.3}           // Se activa al 30% del final
+        ListFooterComponent={renderFooter}     // Spinner al cargar más
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#000" />
         }

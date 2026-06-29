@@ -89,6 +89,7 @@ const listarClientesRechazados = async (req, res, next) => {
 };
 
 const obtenerOpciones = async (req, res, next) => {
+    console.log('llegó a obtenerOpciones');
     try {
         const result = await adminService.obtenerOpcionesAdmin();
         return res.status(200).json(result);
